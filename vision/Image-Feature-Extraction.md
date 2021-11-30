@@ -27,7 +27,7 @@ FAST如其名比其他角點偵測演算法速度更快，將角點的定義為�
 ### Descriptors(特徵描述子):
 從keypoints(關鍵點)的局部區域計算出特徵向量
 1. SIFT(Scale-Invariant Feature Transform):
-   第一個被提出的尺度不變性(Scale-Invariant)演算法，發表在1999年的國際頂級會議ICCV，至今還是在CV領域被廣泛使用。SIFT使用尺度空間極值檢測(Scale-space Extrema Detection)找出關鍵點，其取得的特徵不會隨影像的尺寸變化和旋轉而被改變，對於亮度變化也能容忍，SIFT本身就包含尋找關鍵點(keypoints)的功能，在關鍵點的相鄰區域對於選定的尺度圖上使用histogram(直方圖)統計相鄰像素的gradient magnitude(梯度強度)和方向(8種方向)，最後取得`16*8=128維度的描述子`。[參考](https://docs.opencv.org/4.x/da/df5/tutorial_py_sift_intro.html)
+   第一個被提出的尺度不變性(Scale-Invariant)演算法，發表在1999年的國際頂級會議ICCV，至今還是在CV領域被廣泛使用。SIFT使用尺度空間極值檢測(Scale-space Extrema Detection)找出具有尺度不變性的關鍵點位置，計算相鄰尺度間的difference-of-Gaussian求得區域最大或最小值(local maxima and minima)。其取得的特徵不會隨影像的尺寸變化和旋轉而被改變，對於亮度變化也能容忍，因此SIFT本身就包含尋找關鍵點(keypoints)的功能，在關鍵點的相鄰區域對於選定的尺度圖上使用histogram(直方圖)統計相鄰像素的gradient magnitude(梯度強度)和方向(8種方向)，最後取得`16*8=128維度的描述子`。[參考](https://docs.opencv.org/4.x/da/df5/tutorial_py_sift_intro.html)
 
    <img src="./assets/SIFT.jpg" width="500" />
 
