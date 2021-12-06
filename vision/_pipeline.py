@@ -25,7 +25,6 @@ class feature_extraction:
         self.maxFeatures = maxFeatures
         self.keepPercent = keepPercent
         
-        
     def execute(self, image: object) -> Tuple[tuple,np.ndarray]:
         print('FeatureExtraction.execute ')
         (keypoints, descrips) = self.process.get_keypoint(image,maxFeatures=self.maxFeatures)
