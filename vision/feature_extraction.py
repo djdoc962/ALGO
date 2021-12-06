@@ -2,8 +2,30 @@ import cv2
 import numpy as np
 
 
+class Display:
 
-class ImageAlignment():
+    def show_keypoints(self,keypoints):
+        print('keypoints length: {} ======================================'.format(len(keypoints)))
+        for i, keypoint in enumerate(keypoints):
+            print('i: {}, (x,y): ({}, {})'.format(i,keypoint.pt[0],keypoint.pt[1]))
+
+    def show_descriptors(self,descriptors):
+        print('descriptors length: {} with dimension: {} ======================================'.format(len(descriptors),len(descriptors[0])))
+        for i, feature in  enumerate(descriptors):
+            print('i: {}, feature: {}'.format(i,feature[:]))
+
+    def show_matches(self,matches):
+        """
+        match.trainIdx: Index of the descriptor in train descriptors
+        match.queryIdx: Index of the descriptor in query descriptors
+        match.distance: Distance between descriptors. The lower, the better it is.
+        """
+        print('matches length: {} ======================================'.format(len(matches)))
+        for i, match in enumerate(matches):
+            print('i: {}, Idx: {}, {}'.format(i,match.queryIdx,match.trainIdx))
+
+
+class FeatureExtraction:
 
     def get_keypoint(self, image, maxFeatures=500):
         """
@@ -19,6 +41,9 @@ class ImageAlignment():
         orb = cv2.ORB_create(maxFeatures)
         (keypoints, descrips) = orb.detectAndCompute(image, None)
         return keypoints, descrips
+
+
+class ImageAlignment:
 
     def match(self, descripA, descripB,keepPercent=0.2, method=0):
         """
@@ -74,18 +99,3 @@ class ImageAlignment():
         #     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) 
         wraped = cv2.warpPerspective(image, H, size)
         return wraped
-
-    def show_keypoints(self,keypoints):
-        print('keypoints length: {} ======================================'.format(len(keypoints)))
-        for i, keypoint in enumerate(keypoints):
-            print('i: {}, (x,y): ({}, {})'.format(i,keypoint.pt[0],keypoint.pt[1]))
-
-    def show_descriptors(self,descriptors):
-        print('descriptors length: {} with dimension: {} ======================================'.format(len(descriptors),len(descriptors[0])))
-        for i, feature in  enumerate(descriptors):
-            print('i: {}, feature: {}'.format(i,feature[:]))
-
-    def show_matches(self,matches):
-        print('matches length: {} ======================================'.format(len(matches)))
-        for i, match in enumerate(matches):
-            print('i: {}, Idx: {}, {}'.format(i,match.queryIdx,match.trainIdx))

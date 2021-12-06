@@ -1,22 +1,46 @@
-from typing import List, Any, Union
+from typing import List, Any, Union, Tuple
 import inspect
+import cv2
+import numpy as np
+from feature_extraction import FeatureExtraction,ImageAlignment, Display
 
 
-class LoadImage:
-    def execute(self):
+class load_image:
+    
+    def execute(self, img_path: str) -> np.ndarray:
         print('LoadImage.execute ')
+        ## TODO: 參數設定color or gray image
+        input_img = cv2.imread(img_path)
+        # input_img ='abc'
+        return input_img
 
-class FeatureExtraction:
-    def execute(self):
+class feature_extraction:
+    
+    def __init__(self,
+        maxFeatures: int = 200,
+        keepPercent: float = 0.5) -> None:
+        print('feature_extraction.__init__')
+        self.process = FeatureExtraction()
+        # Parameters of feature extraction
+        self.maxFeatures = maxFeatures
+        self.keepPercent = keepPercent
+        
+        
+    def execute(self, image: object) -> Tuple[tuple,np.ndarray]:
         print('FeatureExtraction.execute ')
+        (keypoints, descrips) = self.process.get_keypoint(image,maxFeatures=self.maxFeatures)
+        Display().show_keypoints(keypoints)
+        return keypoints, descrips
 
-class FeatureMatching:
-    def execute(self):
+class feature_matching:
+    def execute(self, text: str) -> str:
         print('FeatureMatching.execute ')
+        return text+'_FeatureMatching'
 
-class ImageAlignment:
-    def execute(self):
+class image_alignment:
+    def execute(self, text: str) -> str:
         print('ImageAlignment.execute ')
+        return text+'_ImageAlignment'
 
 
 class PipelineBase:
@@ -31,12 +55,12 @@ class PipelineBase:
                  processes: List[Any], 
                  *args, **kwargs) -> None:
         self._processes = processes
-        self.processes = []
+        # self.processes = []
         for k, v in kwargs.items():
             self[k] = v
-        print('self.processes=>'+str(self.processes) )
+        # print('self.processes=>'+str(self.processes) )
 
-    def execute(self):
+    def execute(self, in_out: Any):
         for _proc in self._processes:
             print(type(_proc))
             # TODO: 若類別則為物件做初始化，若不是維持原狀，最後
@@ -52,9 +76,10 @@ class PipelineBase:
 
             print('proc =>')
             print(proc)
-            self.processes.append(proc)
+            # self.processes.append(proc)
           
-            proc.execute()
+            in_out = proc.execute(in_out)
+            print('text=> '+str(type(in_out)))
 
         return self
 
@@ -74,6 +99,8 @@ class PipelineBase:
 
 
 if __name__ == '__main__':
-    processes = [LoadImage,FeatureExtraction,FeatureMatching,ImageAlignment]
-    data_pipeline = PipelineBase(processes)
-    data_pipeline.execute()
+    # processes = [LoadImage,FeatureExtraction,FeatureMatching,ImageAlignment]
+    processes = [load_image,feature_extraction(maxFeatures=200,keepPercent=0.5)]
+    vision_pipeline = PipelineBase(processes)
+    img_path = "./image/table4.jpg"
+    vision_pipeline.execute(img_path)
