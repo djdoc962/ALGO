@@ -5,14 +5,22 @@ import numpy as np
 from feature_extraction import FeatureExtraction,ImageAlignment, Display
 
 
+class write_image:
+    def execute(self,image: np.ndarray,save_path: str = './') -> None:
+        cv2.imwrite(save_path,image)
+
 class load_image:
     
     def execute(self, img_path: str) -> np.ndarray:
-        print('LoadImage.execute ')
+        print('LoadImage.execute =>'+img_path)
         ## TODO: 參數設定color or gray image
         input_img = cv2.imread(img_path)
         # input_img ='abc'
         return input_img
+
+    def get_size(self,image):
+        return image.shape[:2]
+
 
 class feature_extraction:
     
@@ -20,26 +28,62 @@ class feature_extraction:
         maxFeatures: int = 200,
         keepPercent: float = 0.5) -> None:
         print('feature_extraction.__init__')
-        self.process = FeatureExtraction()
         # Parameters of feature extraction
         self.maxFeatures = maxFeatures
         self.keepPercent = keepPercent
         
-    def execute(self, image: object) -> Tuple[tuple,np.ndarray]:
+    def execute(self, image: np.ndarray) -> Tuple[tuple,np.ndarray]:
         print('FeatureExtraction.execute ')
-        (keypoints, descrips) = self.process.get_keypoint(image,maxFeatures=self.maxFeatures)
+        (keypoints, descrips) = FeatureExtraction().get_keypoint(image,maxFeatures=self.maxFeatures)
         Display().show_keypoints(keypoints)
         return keypoints, descrips
 
 class feature_matching:
-    def execute(self, text: str) -> str:
+    # def __init__(self,
+    #     descripsQuery: tuple,
+    #     descripsReference: np.ndarray,
+    #     keepPercent: float = 0.5) -> None:
+    #     if descripsQuery is None:
+    #         raise Exception(' Can NOT find `descripsQuery` ')
+        
+    #     if descripsReference is None:
+    #         raise Exception(' Can NOT find `descripsReference` ')
+    #     self.descripsQuery = descripsQuery
+    #     self.descripsReference = descripsReference
+    #     self.keepPercent = keepPercent
+    def __init__(self,keepPercent: float = 0.5) -> None:
+        self.keepPercent = keepPercent
+
+    def execute(self, data: Any) -> list:
         print('FeatureMatching.execute ')
-        return text+'_FeatureMatching'
+        matches = ImageAlignment().match(data[0],data[1], keepPercent=self.keepPercent)
+        return matches
 
 class image_alignment:
-    def execute(self, text: str) -> str:
+    def __init__(self,template_path: str,query_keypoints: tuple, reference_keypoints: tuple, matches: list) -> None:
+        print('image_alignment.__init__')
+        if template_path is None:
+            raise Exception(' Can NOT find `template_path` ')
+        if query_keypoints is None:
+            raise Exception(' Can NOT find `query_keypoints` ')
+        if reference_keypoints is None:
+            raise Exception(' Can NOT find `reference_keypoints` ')
+        if matches is None:
+            raise Exception(' Can NOT find `matches` ')
+        self.template_path = template_path
+        self.query_keypoints = query_keypoints
+        self.reference_keypoints = reference_keypoints
+        self.matches = matches
+   
+    def execute(self, img_path: str) -> np.ndarray:
         print('ImageAlignment.execute ')
-        return text+'_ImageAlignment'
+        print('is subclass ? '+str(issubclass(image_alignment, load_image)))
+        input_img = load_image().execute(img_path)
+        template_img = load_image().execute(self.template_path)
+        H_matrix = ImageAlignment().find_homography(self.query_keypoints , self.reference_keypoints, self.matches)
+        aligned_img = ImageAlignment().wrap(input_img, H_matrix, load_image().get_size(template_img) )
+        write_image().execute(aligned_img, save_path = './aligned.png')
+        return aligned_img
 
 
 class PipelineBase:
@@ -63,11 +107,6 @@ class PipelineBase:
         for _proc in self._processes:
             print(type(_proc))
             # TODO: 若類別則為物件做初始化，若不是維持原狀，最後
-            # if isinstance(_proc, LoadImage):
-            #     proc = self._init_class(_proc)
-            # else:
-            #     proc = _proc
-
             if inspect.isclass(_proc):
                 proc = self._init_class(_proc)
             else:
@@ -80,7 +119,7 @@ class PipelineBase:
             in_out = proc.execute(in_out)
             print('text=> '+str(type(in_out)))
 
-        return self
+        return in_out
 
     def _init_class(self, proc):
         print('_init_class')
@@ -99,7 +138,34 @@ class PipelineBase:
 
 if __name__ == '__main__':
     # processes = [LoadImage,FeatureExtraction,FeatureMatching,ImageAlignment]
-    processes = [load_image,feature_extraction(maxFeatures=200,keepPercent=0.5)]
-    vision_pipeline = PipelineBase(processes)
+    processes_LocalFeatures = [load_image,feature_extraction(maxFeatures=200,keepPercent=0.5)]
+    vision_pipeline = PipelineBase(processes_LocalFeatures)
+    # get features on query image
     img_path = "./image/table4.jpg"
-    vision_pipeline.execute(img_path)
+    output = vision_pipeline.execute(img_path)
+    query_keypoints = output[0]
+    query_descriptors = output[1]
+    print('get output from Pipeline =>')
+    print('Total {} keypoints and {} descriptors'.format(len(query_keypoints),len(query_descriptors)))
+    Display().show_keypoints(query_keypoints)
+    # Display().show_descriptors(query_descriptors)
+    # get features on  image
+    img_path = "./image/template.jpg"
+    output = vision_pipeline.execute(img_path)
+    reference_keypoints = output[0]
+    reference_descriptors = output[1]
+    print('Total {} keypoints and {} descriptors'.format(len(reference_keypoints),len(reference_descriptors)))
+    Display().show_keypoints(reference_keypoints)
+    # Display().show_descriptors(reference_descriptors)
+    # feature matching
+    processes_alignment = [feature_matching(keepPercent=0.5)]
+    vision_pipeline = PipelineBase(processes_alignment)
+    matches = vision_pipeline.execute([query_descriptors,reference_descriptors])
+    Display().show_matches(matches)
+
+    # alignment
+    img_path = "./image/table4.jpg"
+    template_path = "./image/template.jpg"
+    processes_alignment = [image_alignment(template_path,query_keypoints,reference_keypoints,matches)]
+    vision_pipeline = PipelineBase(processes_alignment)
+    result_img = vision_pipeline.execute(img_path)
