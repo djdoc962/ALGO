@@ -2,28 +2,31 @@ from typing import List, Any, Union, Tuple
 import inspect
 import cv2
 import numpy as np
-from feature_extraction import FeatureExtraction,ImageAlignment, Display
+# from feature_extraction import FeatureExtraction,ImageAlignment, Display
+# TODO: 不要引用依賴 類別命名必然大寫去掉底線
+class Display:
+    def show_keypoints(self,keypoints):
+        print('keypoints length: {} ======================================'.format(len(keypoints)))
+        for i, keypoint in enumerate(keypoints):
+            print('i: {}, (x,y): ({}, {})'.format(i,keypoint.pt[0],keypoint.pt[1]))
+
+    def show_descriptors(self,descriptors):
+        print('descriptors length: {} with dimension: {} ======================================'.format(len(descriptors),len(descriptors[0])))
+        for i, feature in  enumerate(descriptors):
+            print('i: {}, feature: {}'.format(i,feature[:]))
+
+    def show_matches(self,matches):
+        """
+        match.trainIdx: Index of the descriptor in train descriptors
+        match.queryIdx: Index of the descriptor in query descriptors
+        match.distance: Distance between descriptors. The lower, the better it is.
+        """
+        print('matches length: {} ======================================'.format(len(matches)))
+        for i, match in enumerate(matches):
+            print('i: {}, Idx: {}, {}'.format(i,match.queryIdx,match.trainIdx))
 
 
-class write_image:
-    def execute(self,image: np.ndarray,save_path: str = './') -> None:
-        cv2.imwrite(save_path,image)
-
-class load_image:
-    
-    def execute(self, img_path: str) -> np.ndarray:
-        print('LoadImage.execute =>'+img_path)
-        ## TODO: 參數設定color or gray image
-        input_img = cv2.imread(img_path)
-        # input_img ='abc'
-        return input_img
-
-    def get_size(self,image):
-        return image.shape[:2]
-
-
-class feature_extraction:
-    
+class FeatureExtraction:
     def __init__(self,
         maxFeatures: int = 200,
         keepPercent: float = 0.5) -> None:
@@ -38,28 +41,34 @@ class feature_extraction:
         Display().show_keypoints(keypoints)
         return keypoints, descrips
 
-class feature_matching:
-    # def __init__(self,
-    #     descripsQuery: tuple,
-    #     descripsReference: np.ndarray,
-    #     keepPercent: float = 0.5) -> None:
-    #     if descripsQuery is None:
-    #         raise Exception(' Can NOT find `descripsQuery` ')
-        
-    #     if descripsReference is None:
-    #         raise Exception(' Can NOT find `descripsReference` ')
-    #     self.descripsQuery = descripsQuery
-    #     self.descripsReference = descripsReference
-    #     self.keepPercent = keepPercent
+
+    def get_keypoint(self, image, maxFeatures=500):
+        """
+        detect keypoints and extract (binary) local invariant features
+        keypoints: FAST keypoint including coordination
+        descrips: BRIEF descriptor(32 dimensions By default)
+        """
+        # convert both the input image to grayscale
+        if( len(image.shape) > 2 ):
+            print('It is a color image, will be converted to gray image.')
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) 
+  
+        orb = cv2.ORB_create(maxFeatures)
+        (keypoints, descrips) = orb.detectAndCompute(image, None)
+        return keypoints, descrips
+
+
+class FeatureMatching:
     def __init__(self,keepPercent: float = 0.5) -> None:
         self.keepPercent = keepPercent
 
     def execute(self, data: Any) -> list:
         print('FeatureMatching.execute ')
-        matches = ImageAlignment().match(data[0],data[1], keepPercent=self.keepPercent)
+        matches = ImageAlignment.match(data[0],data[1], keepPercent=self.keepPercent)
         return matches
+ 
 
-class image_alignment:
+class ImageAlignment:
     def __init__(self,template_path: str,query_keypoints: tuple, reference_keypoints: tuple, matches: list) -> None:
         print('image_alignment.__init__')
         if template_path is None:
@@ -75,15 +84,99 @@ class image_alignment:
         self.reference_keypoints = reference_keypoints
         self.matches = matches
    
+    @classmethod
+    def match(cls, descripA, descripB,keepPercent=0.2, method=0):
+        """
+        match the features between images
+        matches: 
+        """
+        if method == 0:
+            method = cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING
+        else:
+            method = cv2.DescriptorMatcher_FLANNBASED
+        matcher = cv2.DescriptorMatcher_create(method)
+        matches = matcher.match(descripA, descripB, None)
+        matches = sorted(matches, key=lambda x:x.distance)
+        # keep only the top matches
+        keep = int(len(matches) * keepPercent)
+        matches = matches[:keep]
+        return matches
+
+    @classmethod
+    def Match2Keypoint(cls,matches,KptA,KptB):
+        """
+        get matching keypoints for each of the images
+        ptsA: coordinates of image A
+        ptsB: coordinates of image B
+        """
+        ptsA = np.zeros((len(matches), 2), dtype="float")
+        ptsB = np.zeros((len(matches), 2), dtype="float")
+        # loop over the top matches
+        for (i, m) in enumerate(matches):
+            # indicate that the two keypoints in the respective images
+            # map to each other
+            ptsA[i] = KptA[m.queryIdx].pt
+            ptsB[i] = KptB[m.trainIdx].pt
+        return ptsA, ptsB
+
+    @classmethod
+    def find_homography(cls,kpsA, kpsB, matches, method=0):
+        """
+        calculate homography matrix (perspective transformation), should have at least 4 corresponding point
+        H: homography matrix
+        """
+        print('find_homography =>')
+        if method == 0:
+            method = cv2.RANSAC
+
+        if matches is None:
+            print('matches is None')
+        if kpsA is None:
+            print('kpsA is None')
+        if kpsB is None:
+            print('kpsB is None')
+        ptsA, ptsB = cls.Match2Keypoint(matches,kpsA,kpsB)
+        (H, mask) = cv2.findHomography(ptsA, ptsB, method=cv2.RANSAC)
+        print('find_homography => Done')
+        return H
+
+    @classmethod
+    def wrap(self, image, H, size ):
+        """
+        align image via transformation
+        wraped: wraped image
+        """
+        # if( len(image.shape) > 2 ):
+        #     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) 
+        wraped = cv2.warpPerspective(image, H, size)
+        return wraped
+
     def execute(self, img_path: str) -> np.ndarray:
         print('ImageAlignment.execute ')
-        print('is subclass ? '+str(issubclass(image_alignment, load_image)))
-        input_img = load_image().execute(img_path)
-        template_img = load_image().execute(self.template_path)
-        H_matrix = ImageAlignment().find_homography(self.query_keypoints , self.reference_keypoints, self.matches)
-        aligned_img = ImageAlignment().wrap(input_img, H_matrix, load_image().get_size(template_img) )
-        write_image().execute(aligned_img, save_path = './aligned.png')
+    
+        input_img = LoadImage().execute(img_path)
+        template_img = LoadImage().execute(self.template_path)
+        a = ImageAlignment
+        H_matrix = a.find_homography(self.query_keypoints , self.reference_keypoints, self.matches)
+        aligned_img = self.wrap(input_img, H_matrix, LoadImage().get_size(template_img) )
+        WriteImage().execute(aligned_img, save_path = './aligned.png')
         return aligned_img
+
+
+class WriteImage:
+    def execute(self,image: np.ndarray,save_path: str = './') -> None:
+        cv2.imwrite(save_path,image)
+
+
+class LoadImage:
+    def execute(self, img_path: str) -> np.ndarray:
+        print('LoadImage.execute =>'+img_path)
+        input_img = cv2.imread(img_path)
+        # input_img ='abc'
+        return input_img
+
+    def get_size(self,image):
+        return image.shape[:2]
 
 
 class PipelineBase:
@@ -107,6 +200,7 @@ class PipelineBase:
         for _proc in self._processes:
             print(type(_proc))
             # TODO: 若類別則為物件做初始化，若不是維持原狀，最後
+            out_data = []
             if inspect.isclass(_proc):
                 proc = self._init_class(_proc)
             else:
@@ -138,7 +232,7 @@ class PipelineBase:
 
 if __name__ == '__main__':
     # processes = [LoadImage,FeatureExtraction,FeatureMatching,ImageAlignment]
-    processes_LocalFeatures = [load_image,feature_extraction(maxFeatures=200,keepPercent=0.5)]
+    processes_LocalFeatures = [LoadImage,FeatureExtraction(maxFeatures=200,keepPercent=0.5)]
     vision_pipeline = PipelineBase(processes_LocalFeatures)
     # get features on query image
     img_path = "./image/table4.jpg"
@@ -149,7 +243,7 @@ if __name__ == '__main__':
     print('Total {} keypoints and {} descriptors'.format(len(query_keypoints),len(query_descriptors)))
     Display().show_keypoints(query_keypoints)
     # Display().show_descriptors(query_descriptors)
-    # get features on  image
+    # get features on image
     img_path = "./image/template.jpg"
     output = vision_pipeline.execute(img_path)
     reference_keypoints = output[0]
@@ -158,7 +252,7 @@ if __name__ == '__main__':
     Display().show_keypoints(reference_keypoints)
     # Display().show_descriptors(reference_descriptors)
     # feature matching
-    processes_alignment = [feature_matching(keepPercent=0.5)]
+    processes_alignment = [FeatureMatching(keepPercent=0.5)]
     vision_pipeline = PipelineBase(processes_alignment)
     matches = vision_pipeline.execute([query_descriptors,reference_descriptors])
     Display().show_matches(matches)
@@ -166,6 +260,6 @@ if __name__ == '__main__':
     # alignment
     img_path = "./image/table4.jpg"
     template_path = "./image/template.jpg"
-    processes_alignment = [image_alignment(template_path,query_keypoints,reference_keypoints,matches)]
+    processes_alignment = [ImageAlignment(template_path,query_keypoints,reference_keypoints,matches)]
     vision_pipeline = PipelineBase(processes_alignment)
     result_img = vision_pipeline.execute(img_path)
