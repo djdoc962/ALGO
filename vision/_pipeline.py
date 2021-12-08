@@ -1,9 +1,8 @@
-from typing import List, Any, Union, Tuple
+from typing import Dict, List, Any, Union, Tuple
 import inspect
 import cv2
 import numpy as np
-# from feature_extraction import FeatureExtraction,ImageAlignment, Display
-# TODO: 不要引用依賴 類別命名必然大寫去掉底線
+
 class Display:
     def show_keypoints(self,keypoints):
         print('keypoints length: {} ======================================'.format(len(keypoints)))
@@ -17,9 +16,11 @@ class Display:
 
     def show_matches(self,matches):
         """
+        matches: DMatch object from OpenCV
         match.trainIdx: Index of the descriptor in train descriptors
         match.queryIdx: Index of the descriptor in query descriptors
         match.distance: Distance between descriptors. The lower, the better it is.
+        DMatch.imgIdx: Index of the train image
         """
         print('matches length: {} ======================================'.format(len(matches)))
         for i, match in enumerate(matches):
@@ -35,11 +36,16 @@ class FeatureExtraction:
         self.maxFeatures = maxFeatures
         self.keepPercent = keepPercent
         
-    def execute(self, image: np.ndarray) -> Tuple[tuple,np.ndarray]:
+    def execute(self, data: Any) -> Tuple[tuple,np.ndarray]:
         print('FeatureExtraction.execute ')
-        (keypoints, descrips) = FeatureExtraction().get_keypoint(image,maxFeatures=self.maxFeatures)
-        Display().show_keypoints(keypoints)
-        return keypoints, descrips
+        # image = data['query_image']
+        # print(image)
+        (keypoints, descrips) = FeatureExtraction().get_keypoint(data['query_image'],maxFeatures=self.maxFeatures)
+        # print('show_keypoints =>')
+        # Display().show_keypoints(keypoints)
+        data['query_keypoints'] = keypoints
+        data['query_descriptors'] = descrips
+        return data
 
 
     def get_keypoint(self, image, maxFeatures=500):
@@ -88,7 +94,7 @@ class ImageAlignment:
     def match(cls, descripA, descripB,keepPercent=0.2, method=0):
         """
         match the features between images
-        matches: 
+        matches: DMatch object from OpenCV
         """
         if method == 0:
             method = cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING
@@ -169,11 +175,16 @@ class WriteImage:
 
 
 class LoadImage:
-    def execute(self, img_path: str) -> np.ndarray:
-        print('LoadImage.execute =>'+img_path)
-        input_img = cv2.imread(img_path)
-        # input_img ='abc'
-        return input_img
+    def execute(self, img_path: Any) -> np.ndarray:
+        print('LoadImage.execute =>'+ str(img_path))
+        # input_img = cv2.imread(img_path)
+        key = list(img_path.keys())[0]
+        value = list(img_path.values())[0]
+        input_img = cv2.imread(value)
+        _data = Data()
+        _data._DATA[key]=value
+        _data._DATA['query_image']=input_img
+        return _data._DATA
 
     def get_size(self,image):
         return image.shape[:2]
@@ -181,12 +192,6 @@ class LoadImage:
 
 class PipelineBase:
 
-    # _PREPROC_CLASS_MAP = {
-    #     'LoadImage': LoadImage,
-    #     'FeatureExtraction': FeatureExtraction,
-    #     'FeatureMatching': FeatureMatching,
-    #     'ImageAlignment': ImageAlignment,
-    # }
     def __init__(self, 
                  processes: List[Any], 
                  *args, **kwargs) -> None:
@@ -197,10 +202,11 @@ class PipelineBase:
         # print('self.processes=>'+str(self.processes) )
 
     def execute(self, in_out: Any):
+        out_data = []
         for _proc in self._processes:
             print(type(_proc))
             # TODO: 若類別則為物件做初始化，若不是維持原狀，最後
-            out_data = []
+            
             if inspect.isclass(_proc):
                 proc = self._init_class(_proc)
             else:
@@ -211,9 +217,10 @@ class PipelineBase:
             # self.processes.append(proc)
           
             in_out = proc.execute(in_out)
+            out_data.append(in_out)
             print('text=> '+str(type(in_out)))
 
-        return in_out
+        return out_data
 
     def _init_class(self, proc):
         print('_init_class')
@@ -230,24 +237,57 @@ class PipelineBase:
         return proc(**kwargs)
 
 
+class Data:
+    def __init__(self) -> None:
+        self._DATA_MAP = {
+        'queryImg_path': str,
+        'templateImg_path': str,
+        'query_image': np.ndarray,
+        'template_image': np.ndarray,
+        'query_keypoints': tuple,
+        'query_descriptors': tuple,
+        'template_Keypoints': tuple,
+        'template_descriptors': tuple,
+        'matches': list,
+        }
+        
+        self._DATA = {}
+
 if __name__ == '__main__':
     # processes = [LoadImage,FeatureExtraction,FeatureMatching,ImageAlignment]
     processes_LocalFeatures = [LoadImage,FeatureExtraction(maxFeatures=200,keepPercent=0.5)]
     vision_pipeline = PipelineBase(processes_LocalFeatures)
     # get features on query image
     img_path = "./image/table4.jpg"
-    output = vision_pipeline.execute(img_path)
-    query_keypoints = output[0]
-    query_descriptors = output[1]
+    #TODO: 每個process的input/output用Dictionary來傳遞
+    output = vision_pipeline.execute( {'queryImg_path':img_path})
+    output = output[0]
+    print('output type : '+str(type(output)))
+    for key in output.keys():
+        # print(key,'->',output[0][key])
+        print('Key->'+ key)
+       
+    # query_keypoints = output[0]
+    # query_descriptors = output[1]
+    query_keypoints = output['query_keypoints']
+    query_descriptors = output['query_descriptors']
     print('get output from Pipeline =>')
     print('Total {} keypoints and {} descriptors'.format(len(query_keypoints),len(query_descriptors)))
     Display().show_keypoints(query_keypoints)
     # Display().show_descriptors(query_descriptors)
     # get features on image
     img_path = "./image/template.jpg"
-    output = vision_pipeline.execute(img_path)
-    reference_keypoints = output[0]
-    reference_descriptors = output[1]
+    output = vision_pipeline.execute({'templateImg_path':img_path})
+    output = output[0]
+    print('output type : '+str(type(output)))
+    for key in output.keys():
+        # print(key,'->',output[0][key])
+        print('Key->'+ key)
+    # reference_keypoints = output[0]
+    # reference_descriptors = output[1]
+    reference_keypoints = output['template_keypoints']
+    reference_descriptors = output['template_descriptors']
+
     print('Total {} keypoints and {} descriptors'.format(len(reference_keypoints),len(reference_descriptors)))
     Display().show_keypoints(reference_keypoints)
     # Display().show_descriptors(reference_descriptors)
