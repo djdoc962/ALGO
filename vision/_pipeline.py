@@ -1,4 +1,5 @@
 from typing import Dict, List, Any, Union, Tuple
+from dataclasses import dataclass, asdict
 import inspect
 import cv2
 import numpy as np
@@ -36,15 +37,29 @@ class FeatureExtraction:
         self.maxFeatures = maxFeatures
         self.keepPercent = keepPercent
         
-    def execute(self, data: Any) -> Tuple[tuple,np.ndarray]:
-        print('FeatureExtraction.execute ')
-        # image = data['query_image']
-        # print(image)
-        (keypoints, descrips) = FeatureExtraction().get_keypoint(data['query_image'],maxFeatures=self.maxFeatures)
-        # print('show_keypoints =>')
-        # Display().show_keypoints(keypoints)
-        data['query_keypoints'] = keypoints
-        data['query_descriptors'] = descrips
+    def execute(self, data: Any) -> Any:
+        print('FeatureExtraction.execute =>'+str(data))
+     
+        # print(asdict(data))
+        if not Data.check_exists(data.query_keypoints):
+            print('[{}] `query_keypoints` is not existed, extracting it now...'.format(self.__class__.__name__))
+            (keypoints, descrips) = FeatureExtraction().get_keypoint(data.query_image,maxFeatures=self.maxFeatures)
+            data.query_keypoints = keypoints
+            data.query_descriptors = descrips
+        elif not Data.check_exists(data.template_keypoints):
+            print('[{}] `template_keypoints` is not existed, extracting it now...'.format(self.__class__.__name__))
+            (keypoints, descrips) = FeatureExtraction().get_keypoint(data.template_image,maxFeatures=self.maxFeatures)
+            data.template_keypoints = keypoints
+            data.template_descriptors = descrips
+        else:
+            print('[{}] `query_keypoints/descriptors` and `template_keypoints/descriptors` are already existed. '.format(self.__class__.__name__))
+            print('[{}] checking `query_keypoints/descriptors` and `template_keypoints/descriptors` ... '.format(self.__class__.__name__)) 
+            Data.check_type(data.query_keypoints,list)
+            Data.check_type(data.query_descriptors,np.ndarray)
+            Data.check_type(data.template_keypoints,list)
+            Data.check_type(data.template_descriptors,np.ndarray)
+        
+
         return data
 
 
@@ -68,28 +83,18 @@ class FeatureMatching:
     def __init__(self,keepPercent: float = 0.5) -> None:
         self.keepPercent = keepPercent
 
-    def execute(self, data: Any) -> list:
+    def execute(self, data: Any) -> Any:
         print('FeatureMatching.execute ')
-        matches = ImageAlignment.match(data[0],data[1], keepPercent=self.keepPercent)
-        return matches
+        Data.check_type(data.query_descriptors,np.ndarray)
+        Data.check_type(data.template_descriptors,np.ndarray)
+            
+        matches = ImageAlignment.match(data.query_descriptors,data.template_descriptors, keepPercent=self.keepPercent)
+        data.matches = matches
+        return data
  
 
 class ImageAlignment:
-    def __init__(self,template_path: str,query_keypoints: tuple, reference_keypoints: tuple, matches: list) -> None:
-        print('image_alignment.__init__')
-        if template_path is None:
-            raise Exception(' Can NOT find `template_path` ')
-        if query_keypoints is None:
-            raise Exception(' Can NOT find `query_keypoints` ')
-        if reference_keypoints is None:
-            raise Exception(' Can NOT find `reference_keypoints` ')
-        if matches is None:
-            raise Exception(' Can NOT find `matches` ')
-        self.template_path = template_path
-        self.query_keypoints = query_keypoints
-        self.reference_keypoints = reference_keypoints
-        self.matches = matches
-   
+
     @classmethod
     def match(cls, descripA, descripB,keepPercent=0.2, method=0):
         """
@@ -134,6 +139,9 @@ class ImageAlignment:
         print('find_homography =>')
         if method == 0:
             method = cv2.RANSAC
+        else:
+            method = cv2.RANSAC
+            print('[{}] Only algorithm `{}` can be used so far, sorry ~ '.format(cls.__name__))
 
         if matches is None:
             print('matches is None')
@@ -142,7 +150,7 @@ class ImageAlignment:
         if kpsB is None:
             print('kpsB is None')
         ptsA, ptsB = cls.Match2Keypoint(matches,kpsA,kpsB)
-        (H, mask) = cv2.findHomography(ptsA, ptsB, method=cv2.RANSAC)
+        (H, mask) = cv2.findHomography(ptsA, ptsB, method=method)
         print('find_homography => Done')
         return H
 
@@ -157,16 +165,19 @@ class ImageAlignment:
         wraped = cv2.warpPerspective(image, H, size)
         return wraped
 
-    def execute(self, img_path: str) -> np.ndarray:
-        print('ImageAlignment.execute ')
-    
-        input_img = LoadImage().execute(img_path)
-        template_img = LoadImage().execute(self.template_path)
-        a = ImageAlignment
-        H_matrix = a.find_homography(self.query_keypoints , self.reference_keypoints, self.matches)
-        aligned_img = self.wrap(input_img, H_matrix, LoadImage().get_size(template_img) )
+    def execute(self, data: Any) -> Any:
+        print('ImageAlignment.execute => '+ str(data))
+        Data.check_type(data.query_image,np.ndarray)
+        Data.check_type(data.template_image,np.ndarray)
+        Data.check_type(data.query_keypoints,list)
+        Data.check_type(data.template_keypoints,list)
+        Data.check_type(data.matches,list)
+        
+        H_matrix = ImageAlignment.find_homography(data.query_keypoints , data.template_keypoints, data.matches)
+        aligned_img = self.wrap(data.query_image, H_matrix, LoadImage().get_size(data.template_image) )
         WriteImage().execute(aligned_img, save_path = './aligned.png')
-        return aligned_img
+        data.aligned_image = aligned_img
+        return data
 
 
 class WriteImage:
@@ -175,16 +186,27 @@ class WriteImage:
 
 
 class LoadImage:
-    def execute(self, img_path: Any) -> np.ndarray:
-        print('LoadImage.execute =>'+ str(img_path))
-        # input_img = cv2.imread(img_path)
-        key = list(img_path.keys())[0]
-        value = list(img_path.values())[0]
-        input_img = cv2.imread(value)
-        _data = Data()
-        _data._DATA[key]=value
-        _data._DATA['query_image']=input_img
-        return _data._DATA
+    def execute(self, data: Any) -> Any:
+        print('LoadImage.execute =>'+ str(data))
+        
+        # key = list(img_path.keys())[0]
+        # value = list(img_path.values())[0]
+        # input_img = cv2.imread(value)
+        # _data = Data()
+        # _data._DATA[key]=value
+        # _data._DATA['query_image']=input_img
+        if not Data.check_exists(data.query_image):
+            print('[{}] `query_image` is not existed, loading it now...'.format(self.__class__.__name__))
+            input_img = cv2.imread(data.queryImg_path)
+            data.query_image = input_img
+        elif not Data.check_exists(data.template_image):
+            print('[{}] `template_image` is not existed, loading it now...'.format(self.__class__.__name__))
+            input_img = cv2.imread(data.templateImg_path)
+            data.template_image = input_img
+        else:
+            print('[{}] `query_image` and `template_image` are already existed. '.format(self.__class__.__name__)) 
+
+        return data
 
     def get_size(self,image):
         return image.shape[:2]
@@ -202,11 +224,10 @@ class PipelineBase:
         # print('self.processes=>'+str(self.processes) )
 
     def execute(self, in_out: Any):
-        out_data = []
+       
         for _proc in self._processes:
             print(type(_proc))
-            # TODO: 若類別則為物件做初始化，若不是維持原狀，最後
-            
+
             if inspect.isclass(_proc):
                 proc = self._init_class(_proc)
             else:
@@ -217,10 +238,9 @@ class PipelineBase:
             # self.processes.append(proc)
           
             in_out = proc.execute(in_out)
-            out_data.append(in_out)
-            print('text=> '+str(type(in_out)))
+            print('in_out => '+str(type(in_out)))
 
-        return out_data
+        return in_out
 
     def _init_class(self, proc):
         print('_init_class')
@@ -236,70 +256,53 @@ class PipelineBase:
 
         return proc(**kwargs)
 
-
+@dataclass
 class Data:
-    def __init__(self) -> None:
-        self._DATA_MAP = {
-        'queryImg_path': str,
-        'templateImg_path': str,
-        'query_image': np.ndarray,
-        'template_image': np.ndarray,
-        'query_keypoints': tuple,
-        'query_descriptors': tuple,
-        'template_Keypoints': tuple,
-        'template_descriptors': tuple,
-        'matches': list,
-        }
-        
-        self._DATA = {}
+
+    queryImg_path: str = './'
+    templateImg_path: str = './'
+    query_image: np.ndarray = None
+    template_image: np.ndarray = None
+    query_keypoints: list = None
+    query_descriptors: np.ndarray = None
+    template_keypoints: list = None
+    template_descriptors: np.ndarray = None
+    matches: list = None
+    aligned_image: np.ndarray = None
+
+    @classmethod
+    def check_exists(cls,field_name):
+        if field_name is None:
+            return False
+        return True
+
+    @classmethod
+    def check_type(cls,field_name,field_type):
+        print('check_type =>')
+        if not cls.check_exists(field_name):
+            print('[{}]: field_name is None =>'.format(cls.__name__)) 
+            raise Exception('[{}]: The field is not existed ! '.format(cls.__name__))
+
+        if isinstance(field_name,field_type):
+            print('[{}]: Datatype {} is correct !'.format(cls.__name__,field_type))
+        else:
+            raise Exception('[{}]: Datatype {} is incorrect ! '.format(cls.__name__,field_type))
+
+
+
+
+
 
 if __name__ == '__main__':
-    # processes = [LoadImage,FeatureExtraction,FeatureMatching,ImageAlignment]
-    processes_LocalFeatures = [LoadImage,FeatureExtraction(maxFeatures=200,keepPercent=0.5)]
-    vision_pipeline = PipelineBase(processes_LocalFeatures)
-    # get features on query image
-    img_path = "./image/table4.jpg"
-    #TODO: 每個process的input/output用Dictionary來傳遞
-    output = vision_pipeline.execute( {'queryImg_path':img_path})
-    output = output[0]
-    print('output type : '+str(type(output)))
-    for key in output.keys():
-        # print(key,'->',output[0][key])
-        print('Key->'+ key)
-       
-    # query_keypoints = output[0]
-    # query_descriptors = output[1]
-    query_keypoints = output['query_keypoints']
-    query_descriptors = output['query_descriptors']
-    print('get output from Pipeline =>')
-    print('Total {} keypoints and {} descriptors'.format(len(query_keypoints),len(query_descriptors)))
-    Display().show_keypoints(query_keypoints)
-    # Display().show_descriptors(query_descriptors)
-    # get features on image
-    img_path = "./image/template.jpg"
-    output = vision_pipeline.execute({'templateImg_path':img_path})
-    output = output[0]
-    print('output type : '+str(type(output)))
-    for key in output.keys():
-        # print(key,'->',output[0][key])
-        print('Key->'+ key)
-    # reference_keypoints = output[0]
-    # reference_descriptors = output[1]
-    reference_keypoints = output['template_keypoints']
-    reference_descriptors = output['template_descriptors']
+    """
+    experiment pipeline for image registraction
 
-    print('Total {} keypoints and {} descriptors'.format(len(reference_keypoints),len(reference_descriptors)))
-    Display().show_keypoints(reference_keypoints)
-    # Display().show_descriptors(reference_descriptors)
-    # feature matching
-    processes_alignment = [FeatureMatching(keepPercent=0.5)]
-    vision_pipeline = PipelineBase(processes_alignment)
-    matches = vision_pipeline.execute([query_descriptors,reference_descriptors])
-    Display().show_matches(matches)
-
-    # alignment
-    img_path = "./image/table4.jpg"
-    template_path = "./image/template.jpg"
-    processes_alignment = [ImageAlignment(template_path,query_keypoints,reference_keypoints,matches)]
-    vision_pipeline = PipelineBase(processes_alignment)
-    result_img = vision_pipeline.execute(img_path)
+    """
+    print('[START] pipeline testing ------------------------------')
+    processes = [LoadImage, FeatureExtraction(maxFeatures=200,keepPercent=0.5),LoadImage,FeatureExtraction(maxFeatures=200,keepPercent=0.5),FeatureMatching(keepPercent=0.5),ImageAlignment]
+    vision_pipeline = PipelineBase(processes)
+    pipeline_data = Data()
+    pipeline_data.queryImg_path = './image/table4.jpg'
+    pipeline_data.templateImg_path = './image/template.jpg'
+    pipeline_data = vision_pipeline.execute(pipeline_data)
+    print('pipeline_data =>'+str(pipeline_data))
