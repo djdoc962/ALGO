@@ -172,7 +172,7 @@ class ImageAlignment:
         Data.check_type(data.query_keypoints,list)
         Data.check_type(data.template_keypoints,list)
         Data.check_type(data.matches,list)
-        
+
         H_matrix = ImageAlignment.find_homography(data.query_keypoints , data.template_keypoints, data.matches)
         aligned_img = self.wrap(data.query_image, H_matrix, LoadImage().get_size(data.template_image) )
         WriteImage().execute(aligned_img, save_path = './aligned.png')
@@ -295,7 +295,7 @@ class Data:
 
 if __name__ == '__main__':
     """
-    experiment pipeline for image registraction
+    experiment pipeline for image registration
 
     """
     print('[START] pipeline testing ------------------------------')
