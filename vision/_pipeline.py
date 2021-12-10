@@ -379,7 +379,7 @@ if __name__ == '__main__':
     print(_FeatureExtractionData)
     """
     print('pipeline of LoadImage => FeatureExtraction')
-    # TODO: 一個獨立物件負責產出query_keypoints/query_descriptors和template_keypoints/template_descriptors供給後續的特徵匹配流程.
+    # TODO: 一個獨立物件負責產出query_keypoints/query_descriptors和template_keypoints/template_descriptors供給後續的特徵匹配流程
     _data2 = make_dataclass('Data2',[('Img_path',str),('input_image',np.ndarray),('input_keypoints',list),('input_descriptors',np.ndarray)])
     _data2 = _data2(Img_path='./image/box.png',input_image=None,input_keypoints=None,input_descriptors=None)
     processes = [LoadImage2,FeatureExtraction2(maxFeatures=200,keepPercent=0.5)]
