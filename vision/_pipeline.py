@@ -1,5 +1,5 @@
 from typing import Dict, List, Any, Union, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, make_dataclass
 import inspect
 import cv2
 import numpy as np
@@ -185,16 +185,69 @@ class WriteImage:
         cv2.imwrite(save_path,image)
 
 
+class FeatureExtraction2:
+    # TODO: 單純對一張input_image取關鍵點與描述子
+    def __init__(self,
+        maxFeatures: int = 200,
+        keepPercent: float = 0.5) -> None:
+        print('feature_extraction2.__init__')
+        # Parameters of feature extraction
+        self.maxFeatures = maxFeatures
+        self.keepPercent = keepPercent
+        
+    def execute(self, data: Any) -> Any:
+        print('FeatureExtraction2.execute =>'+str(data))
+     
+        # print(asdict(data))
+        if not Data.check_exists(data.input_keypoints):
+            print('[{}] `input_keypoints` is not existed, extracting it now...'.format(self.__class__.__name__))
+            (keypoints, descrips) = FeatureExtraction().get_keypoint(data.input_image,maxFeatures=self.maxFeatures)
+            data.input_keypoints = keypoints
+            data.input_descriptors = descrips
+       
+        Data.check_type(data.input_keypoints,list)
+        Data.check_type(data.input_descriptors,np.ndarray)
+        
+
+        return data
+
+
+    def get_keypoint(self, image, maxFeatures=500):
+        """
+        detect keypoints and extract (binary) local invariant features
+        keypoints: FAST keypoint including coordination
+        descrips: BRIEF descriptor(32 dimensions By default)
+        """
+        # convert both the input image to grayscale
+        if( len(image.shape) > 2 ):
+            print('It is a color image, will be converted to gray image.')
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) 
+  
+        orb = cv2.ORB_create(maxFeatures)
+        (keypoints, descrips) = orb.detectAndCompute(image, None)
+        return keypoints, descrips
+
+class LoadImage2:
+    # TODO: 單純處理一種影像input_image,不做其他判斷
+    def execute(self, data: Any) -> Any:
+        print('LoadImage2.execute =>'+ str(data))
+        if not Data.check_exists(data.input_image):
+            print('[{}] `input_image` is not existed, loading it now...'.format(self.__class__.__name__))
+        
+            input_img = cv2.imread(data.Img_path)
+            print(input_img)
+            data.input_image = input_img
+   
+        return data
+
+    def get_size(self,image):
+        return image.shape[:2]
+
+
 class LoadImage:
     def execute(self, data: Any) -> Any:
         print('LoadImage.execute =>'+ str(data))
-        
-        # key = list(img_path.keys())[0]
-        # value = list(img_path.values())[0]
-        # input_img = cv2.imread(value)
-        # _data = Data()
-        # _data._DATA[key]=value
-        # _data._DATA['query_image']=input_img
+ 
         if not Data.check_exists(data.query_image):
             print('[{}] `query_image` is not existed, loading it now...'.format(self.__class__.__name__))
             input_img = cv2.imread(data.queryImg_path)
@@ -306,3 +359,34 @@ if __name__ == '__main__':
     pipeline_data.templateImg_path = './image/template.jpg'
     pipeline_data = vision_pipeline.execute(pipeline_data)
     print('pipeline_data =>'+str(pipeline_data))
+    """
+    _LoadImageData = make_dataclass('LoadImageData',[('Img_path',str),('input_image',np.ndarray),('output_image',np.ndarray),])
+    _LoadImageData = _LoadImageData(Img_path='./image/box.png',input_image=None,output_image=None)
+    print(asdict(_LoadImageData))
+
+    processes = [LoadImage2]
+    vision_pipeline = PipelineBase(processes)
+    _LoadImageData = vision_pipeline.execute(_LoadImageData)
+    print(_LoadImageData)
+
+    _FeatureExtractionData = make_dataclass('FeatureExtraction2',[('input_descriptors',np.ndarray),('input_image',np.ndarray),('input_keypoints',list),])
+    _FeatureExtractionData = _FeatureExtractionData(input_image=_LoadImageData.input_image,input_keypoints=None,input_descriptors=None)
+    print(asdict(_FeatureExtractionData))
+
+    processes = [FeatureExtraction2(maxFeatures=200,keepPercent=0.5)]
+    vision_pipeline = PipelineBase(processes)
+    _FeatureExtractionData = vision_pipeline.execute(_FeatureExtractionData)
+    print(_FeatureExtractionData)
+    """
+    print('pipeline of LoadImage => FeatureExtraction')
+    _data2 = make_dataclass('Data2',[('Img_path',str),('input_image',np.ndarray),('input_keypoints',list),('input_descriptors',np.ndarray)])
+    _data2 = _data2(Img_path='./image/box.png',input_image=None,input_keypoints=None,input_descriptors=None)
+    processes = [LoadImage2,FeatureExtraction2(maxFeatures=200,keepPercent=0.5)]
+    vision_pipeline = PipelineBase(processes)
+    _data2 = vision_pipeline.execute(_data2)
+    print(_data2)
+
+
+
+    
+    
