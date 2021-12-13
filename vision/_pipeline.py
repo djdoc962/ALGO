@@ -38,7 +38,7 @@ class FeatureExtraction:
         self.keepPercent = keepPercent
         
     def execute(self, data: Any) -> Any:
-        print('FeatureExtraction.execute =>'+str(data))
+        # print('FeatureExtraction.execute =>'+str(data))
      
         # print(asdict(data))
         if not Data.check_exists(data.query_keypoints):
@@ -108,6 +108,9 @@ class ImageAlignment:
         matcher = cv2.DescriptorMatcher_create(method)
         matches = matcher.match(descripA, descripB, None)
         matches = sorted(matches, key=lambda x:x.distance)
+
+        # TODO: or get k best matches via knnMatch, will be [[<DMatch>,<DMatch>],[<DMatch>,<DMatch>],...]
+        # matches = matcher.knnMatch(descripA, descripB, k=2)
         # keep only the top matches
         keep = int(len(matches) * keepPercent)
         matches = matches[:keep]
@@ -166,7 +169,7 @@ class ImageAlignment:
         return wraped
 
     def execute(self, data: Any) -> Any:
-        print('ImageAlignment.execute => '+ str(data))
+        # print('ImageAlignment.execute => '+ str(data))
         Data.check_type(data.query_image,np.ndarray)
         Data.check_type(data.template_image,np.ndarray)
         Data.check_type(data.query_keypoints,list)
@@ -189,7 +192,7 @@ class FeatureExtraction2:
     # TODO: 單純對一張input_image取關鍵點與描述子
     def __init__(self,
         maxFeatures: int = 200) -> None:
-        print('feature_extraction2.__init__')
+        # print('feature_extraction2.__init__')
         # Parameters of feature extraction
         self.maxFeatures = maxFeatures
      
@@ -238,7 +241,7 @@ class FeatureExtraction2:
 class LoadImage2:
     # TODO: 單純處理一種影像input_image,不做其他判斷
     def execute(self, data: Any) -> Any:
-        print('LoadImage2.execute =>'+ str(data))
+        # print('LoadImage2.execute =>'+ str(data))
         if not Data.check_exists(data.img_path):
             raise Exception('[{}] `Img_path` can not be found !'.format(self.__class__.__name__))
         
@@ -256,7 +259,7 @@ class LoadImage2:
 
 class LoadImage:
     def execute(self, data: Any) -> Any:
-        print('LoadImage.execute =>'+ str(data))
+        # print('LoadImage.execute =>'+ str(data))
  
         if not Data.check_exists(data.query_image):
             print('[{}] `query_image` is not existed, loading it now...'.format(self.__class__.__name__))
@@ -447,7 +450,12 @@ if __name__ == '__main__':
     PairData = PairData(queryImg_path='./image/box.png',templateImg_path='./image/box_in_scene.png',query_image=None,template_image=None,query_keypoints=None,query_descriptors=None,template_keypoints=None,template_descriptors=None,matches=None,aligned_image=None)
     vision_pipeline = PipelineBase([LocalFeaturesPairs,FeatureMatching(keepPercent=0.5),ImageAlignment])
     PairData = vision_pipeline.execute(PairData)
-    print(str(PairData))
+    print('PairData =>'+str(PairData))
+
+    Display().show_matches(PairData.matches)
+    for m,n in PairData.matches:
+        print('m '+m)
+        print('n '+n)
     
 
 
