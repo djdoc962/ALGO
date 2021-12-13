@@ -441,11 +441,11 @@ if __name__ == '__main__':
     print('_data2.img_path=>'+str(_data2))
      """
 
-    PairData = make_dataclass('PairData',[('queryImg_path',str),('templateImg_path',str), ('query_image',np.ndarray),('template_image',np.ndarray), ('query_keypoints',list),('query_descriptors',np.ndarray), ('template_keypoints',list),('template_descriptors',np.ndarray)])
+    PairData = make_dataclass('PairData',[('queryImg_path',str),('templateImg_path',str), ('query_image',np.ndarray),('template_image',np.ndarray), ('query_keypoints',list),('query_descriptors',np.ndarray), ('template_keypoints',list),('template_descriptors',np.ndarray),('matches',list),('aligned_image',np.ndarray)])
     PairData.queryImg_path = './image/box.png'
     PairData.templateImg_path = './image/box_in_scene.png' 
-    PairData = PairData(queryImg_path='./image/box.png',templateImg_path='./image/box_in_scene.png',query_image=None,template_image=None,query_keypoints=None,query_descriptors=None,template_keypoints=None,template_descriptors=None)
-    vision_pipeline = PipelineBase([LocalFeaturesPairs])
+    PairData = PairData(queryImg_path='./image/box.png',templateImg_path='./image/box_in_scene.png',query_image=None,template_image=None,query_keypoints=None,query_descriptors=None,template_keypoints=None,template_descriptors=None,matches=None,aligned_image=None)
+    vision_pipeline = PipelineBase([LocalFeaturesPairs,FeatureMatching(keepPercent=0.5),ImageAlignment])
     PairData = vision_pipeline.execute(PairData)
     print(str(PairData))
     
