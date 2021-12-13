@@ -188,23 +188,31 @@ class WriteImage:
 class FeatureExtraction2:
     # TODO: 單純對一張input_image取關鍵點與描述子
     def __init__(self,
-        maxFeatures: int = 200,
-        keepPercent: float = 0.5) -> None:
+        maxFeatures: int = 200) -> None:
         print('feature_extraction2.__init__')
         # Parameters of feature extraction
         self.maxFeatures = maxFeatures
-        self.keepPercent = keepPercent
+     
         
     def execute(self, data: Any) -> Any:
         print('FeatureExtraction2.execute =>'+str(data))
      
         # print(asdict(data))
-        if not Data.check_exists(data.input_keypoints):
-            print('[{}] `input_keypoints` is not existed, extracting it now...'.format(self.__class__.__name__))
-            (keypoints, descrips) = FeatureExtraction().get_keypoint(data.input_image,maxFeatures=self.maxFeatures)
-            data.input_keypoints = keypoints
-            data.input_descriptors = descrips
-       
+        # if not Data.check_exists(data.input_keypoints):
+        #     print('[{}] `input_keypoints` is not existed, extracting it now...'.format(self.__class__.__name__))
+        #     (keypoints, descrips) = FeatureExtraction().get_keypoint(data.input_image,maxFeatures=self.maxFeatures)
+        #     data.input_keypoints = keypoints
+        #     data.input_descriptors = descrips
+        if not Data.check_exists(data.input_image):
+
+            raise Exception('[{}]  `input_image` can not be found ! '.format(self.__class__.__name__))
+
+        print('[{}] Extracting the keypoints and descrioptors now...'.format(self.__class__.__name__))   
+        (keypoints, descrips) = FeatureExtraction().get_keypoint(data.input_image,maxFeatures=self.maxFeatures)
+        data.input_keypoints = keypoints
+        data.input_descriptors = descrips   
+
+
         Data.check_type(data.input_keypoints,list)
         Data.check_type(data.input_descriptors,np.ndarray)
         
@@ -231,12 +239,14 @@ class LoadImage2:
     # TODO: 單純處理一種影像input_image,不做其他判斷
     def execute(self, data: Any) -> Any:
         print('LoadImage2.execute =>'+ str(data))
-        if not Data.check_exists(data.input_image):
-            print('[{}] `input_image` is not existed, loading it now...'.format(self.__class__.__name__))
+        if not Data.check_exists(data.img_path):
+            raise Exception('[{}] `Img_path` can not be found !'.format(self.__class__.__name__))
         
-            input_img = cv2.imread(data.Img_path)
-            print(input_img)
-            data.input_image = input_img
+
+        print('[{}] Loading image now...'.format(self.__class__.__name__))  
+        input_img = cv2.imread(data.img_path)
+        print(input_img)
+        data.input_image = input_img   
    
         return data
 
@@ -344,6 +354,43 @@ class Data:
 
 
 
+class LocalFeaturesPairs():
+    # def __int__(self, queryImg_path: str = None, templateImg_path: str = None) -> None:
+        # self.data = make_dataclass('PairData',[('queryImg_path',str),('templateImg_path',str), ('query_image',np.ndarray),('template_image',np.ndarray), ('query_keypoints',list),('query_descriptors',np.ndarray), ('template_keypoints',list),('template_descriptors',np.ndarray)])
+ 
+    
+
+    def execute(self, data: Any) -> Any:
+        print('LocalFeaturePairs.execute=>' + str(data))
+        if data.queryImg_path is None:
+            raise Exception('[{}] `queryImg_path` can not be found !'.formta(self.__name__))
+
+        if data.templateImg_path is None:
+            raise Exception('[{}] `templateImg_path` can not be found !'.formta(self.__name__))
+
+    
+        _data = make_dataclass('_data',[('img_path',str),('input_image',np.ndarray),('input_keypoints',list),('input_descriptors',np.ndarray)])
+        _data = _data(img_path=data.queryImg_path,input_image=None,input_keypoints=None,input_descriptors=None)
+        processes = [LoadImage2,FeatureExtraction2(maxFeatures=200)]
+        vision_pipeline = PipelineBase(processes)
+        _data = vision_pipeline.execute(_data)
+        print('query image data=>'+str(_data))
+        data.query_image = _data.input_image
+        data.query_keypoints = _data.input_keypoints
+        data.query_descriptors = _data.input_descriptors
+
+        _data.img_path = data.templateImg_path
+        vision_pipeline = PipelineBase(processes)
+        _data = vision_pipeline.execute(_data)
+        print('template image data=>'+str(_data))
+        data.template_image = _data.input_image
+        data.template_keypoints = _data.input_keypoints
+        data.template_descriptors = _data.input_descriptors
+
+        return data
+
+
+
 
 
 if __name__ == '__main__':
@@ -377,15 +424,31 @@ if __name__ == '__main__':
     vision_pipeline = PipelineBase(processes)
     _FeatureExtractionData = vision_pipeline.execute(_FeatureExtractionData)
     print(_FeatureExtractionData)
-    """
+   
     print('pipeline of LoadImage => FeatureExtraction')
+    
     # TODO: 一個獨立物件負責產出query_keypoints/query_descriptors和template_keypoints/template_descriptors供給後續的特徵匹配流程
-    _data2 = make_dataclass('Data2',[('Img_path',str),('input_image',np.ndarray),('input_keypoints',list),('input_descriptors',np.ndarray)])
-    _data2 = _data2(Img_path='./image/box.png',input_image=None,input_keypoints=None,input_descriptors=None)
-    processes = [LoadImage2,FeatureExtraction2(maxFeatures=200,keepPercent=0.5)]
+    _data2 = make_dataclass('Data2',[('img_path',str),('input_image',np.ndarray),('input_keypoints',list),('input_descriptors',np.ndarray)])
+    _data2 = _data2(img_path='./image/box.png',input_image=None,input_keypoints=None,input_descriptors=None)
+    processes = [LoadImage2,FeatureExtraction2(maxFeatures=200)]
     vision_pipeline = PipelineBase(processes)
     _data2 = vision_pipeline.execute(_data2)
-    print(_data2)
+    print('_data2.img_path=>'+str(_data2))
+
+    _data2.img_path='./image/box_in_scene.png' 
+    vision_pipeline = PipelineBase(processes)
+    _data2 = vision_pipeline.execute(_data2)
+    print('_data2.img_path=>'+str(_data2))
+     """
+
+    PairData = make_dataclass('PairData',[('queryImg_path',str),('templateImg_path',str), ('query_image',np.ndarray),('template_image',np.ndarray), ('query_keypoints',list),('query_descriptors',np.ndarray), ('template_keypoints',list),('template_descriptors',np.ndarray)])
+    PairData.queryImg_path = './image/box.png'
+    PairData.templateImg_path = './image/box_in_scene.png' 
+    PairData = PairData(queryImg_path='./image/box.png',templateImg_path='./image/box_in_scene.png',query_image=None,template_image=None,query_keypoints=None,query_descriptors=None,template_keypoints=None,template_descriptors=None)
+    vision_pipeline = PipelineBase([LocalFeaturesPairs])
+    PairData = vision_pipeline.execute(PairData)
+    print(str(PairData))
+    
 
 
 
