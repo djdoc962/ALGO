@@ -22,6 +22,7 @@ class Display:
         match.queryIdx: Index of the descriptor in query descriptors
         match.distance: Distance between descriptors. The lower, the better it is.
         DMatch.imgIdx: Index of the train image
+        TODO: knnMatch, will be [[<DMatch>,<DMatch>],[<DMatch>,<DMatch>],...]
         """
         print('matches length: {} ======================================'.format(len(matches)))
         for i, match in enumerate(matches):
@@ -80,18 +81,78 @@ class FeatureExtraction:
 
 
 class FeatureMatching:
-    def __init__(self,keepPercent: float = 0.5) -> None:
+    def __init__(self,keepPercent: float = 0.5, method: int = 0) -> None:
+        print('FeatureMatching.__init__')
         self.keepPercent = keepPercent
+        self.method = method
+        print('__init__ => '+str(self.keepPercent)+', '+str(self.method)) 
 
     def execute(self, data: Any) -> Any:
         print('FeatureMatching.execute ')
         Data.check_type(data.query_descriptors,np.ndarray)
         Data.check_type(data.template_descriptors,np.ndarray)
-            
-        matches = ImageAlignment.match(data.query_descriptors,data.template_descriptors, keepPercent=self.keepPercent)
+        print(' => '+str(self.keepPercent)+', '+str(self.method))  
+        matches = self.match(data.query_descriptors,data.template_descriptors, keepPercent=self.keepPercent,method=self.method)
+         
         data.matches = matches
         return data
- 
+
+    @classmethod
+    def good_matches(cls,matches):
+        # Apply ratio test as Lowe's paper
+        good = []
+        for m,n in matches:
+            if m.distance < 0.75*n.distance:
+                good.append([m])
+        return good
+    
+    @classmethod
+    def match(cls, descripA, descripB,keepPercent=0.2, method=0):
+        """
+        MatcherType {
+         FLANNBASED = 1,
+         BRUTEFORCE = 2,
+         BRUTEFORCE_L1 = 3,
+         BRUTEFORCE_HAMMING = 4,
+         BRUTEFORCE_HAMMINGLUT = 5,
+         BRUTEFORCE_SL2 = 6
+        }
+        match the features between images
+        matches: DMatch object from OpenCV
+        """
+       
+        print('match => '+str(keepPercent)+', '+str(method))
+        
+        if method == 0:
+            method = cv2.DescriptorMatcher_BRUTEFORCE_HAMMING
+            print('BRUTEFORCE_HAMMING code=> '+str(method))
+            matcher = cv2.DescriptorMatcher_create(method)
+            matches = matcher.match(descripA, descripB, None)
+            matches = sorted(matches, key=lambda x:x.distance)
+            # keep only the top matches
+            keep = int(len(matches) * keepPercent)
+            matches = matches[:keep]
+        else:
+            K = 2
+            #TODO: or get k best matches via knnMatch, which will be [[<DMatch>,<DMatch>],[<DMatch>,<DMatch>],...]
+            method = cv2.DescriptorMatcher_FLANNBASED
+            print('FLANNBASED code=> '+str(method))
+            matcher = cv2.DescriptorMatcher_create(method)
+            # FLANN parameters
+            FLANN_INDEX_KDTREE = 0
+            # index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+            FLANN_INDEX_LSH = 6
+            index_params= dict(algorithm = FLANN_INDEX_LSH,
+                   table_number = 6, # 12
+                   key_size = 12,     # 20
+                   multi_probe_level = 1) #2
+            search_params = dict(checks=50)   # or pass empty dictionary
+            flann = cv2.FlannBasedMatcher(index_params,search_params)
+            matches = flann.knnMatch(descripA, descripB,k=K)
+        
+        print('matches => '+ str(matches))
+        return matches
+
 
 class ImageAlignment:
 
@@ -101,12 +162,16 @@ class ImageAlignment:
         match the features between images
         matches: DMatch object from OpenCV
         """
+        K = 2
         if method == 0:
             method = cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING
         else:
             method = cv2.DescriptorMatcher_FLANNBASED
+            
         matcher = cv2.DescriptorMatcher_create(method)
-        matches = matcher.match(descripA, descripB, None)
+        print('matcher => '+str(matcher))
+        matches = matcher.knnMatch(descripA, descripB,K)
+        # matches = matcher.match(descripA, descripB, None)
         matches = sorted(matches, key=lambda x:x.distance)
 
         # TODO: or get k best matches via knnMatch, will be [[<DMatch>,<DMatch>],[<DMatch>,<DMatch>],...]
@@ -401,6 +466,7 @@ if __name__ == '__main__':
     experiment pipeline for image registration
 
     """
+    """
     print('[START] pipeline testing ------------------------------')
     processes = [LoadImage, FeatureExtraction(maxFeatures=200,keepPercent=0.5),LoadImage,FeatureExtraction(maxFeatures=200,keepPercent=0.5),FeatureMatching(keepPercent=0.5),ImageAlignment]
     vision_pipeline = PipelineBase(processes)
@@ -409,6 +475,7 @@ if __name__ == '__main__':
     pipeline_data.templateImg_path = './image/template.jpg'
     pipeline_data = vision_pipeline.execute(pipeline_data)
     print('pipeline_data =>'+str(pipeline_data))
+    """
     """
     _LoadImageData = make_dataclass('LoadImageData',[('Img_path',str),('input_image',np.ndarray),('output_image',np.ndarray),])
     _LoadImageData = _LoadImageData(Img_path='./image/box.png',input_image=None,output_image=None)
@@ -448,14 +515,17 @@ if __name__ == '__main__':
     PairData.queryImg_path = './image/box.png'
     PairData.templateImg_path = './image/box_in_scene.png' 
     PairData = PairData(queryImg_path='./image/box.png',templateImg_path='./image/box_in_scene.png',query_image=None,template_image=None,query_keypoints=None,query_descriptors=None,template_keypoints=None,template_descriptors=None,matches=None,aligned_image=None)
-    vision_pipeline = PipelineBase([LocalFeaturesPairs,FeatureMatching(keepPercent=0.5),ImageAlignment])
+    vision_pipeline = PipelineBase([LocalFeaturesPairs,FeatureMatching(keepPercent=0.8,method=3),ImageAlignment])
     PairData = vision_pipeline.execute(PairData)
     print('PairData =>'+str(PairData))
-
-    Display().show_matches(PairData.matches)
-    for m,n in PairData.matches:
-        print('m '+m)
-        print('n '+n)
+    
+    # Display().show_matches(PairData.matches)
+    # Display().show_keypoints(PairData.query_keypoints)
+    # Display().show_descriptors(PairData.query_descriptors)
+    # Display().show_keypoints(PairData.template_keypoints)
+    # Display().show_descriptors(PairData.template_descriptors)
+  
+   
     
 
 
