@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Union, Tuple
+from typing import Dict, List, Any, Union, Tuple, get_type_hints
 from dataclasses import dataclass, asdict, make_dataclass
 import inspect
 import cv2
@@ -266,16 +266,75 @@ class PipelineBase:
 @dataclass
 class Data:
 
-    # queryImg_path: str = './'
-    # templateImg_path: str = './'
-    # query_image: np.ndarray = None
-    # template_image: np.ndarray = None
-    # query_keypoints: list = None
-    # query_descriptors: np.ndarray = None
-    # template_keypoints: list = None
-    # template_descriptors: np.ndarray = None
-    # matches: list = None
-    # aligned_image: np.ndarray = None
+    img_path: str = None
+    # input_image: np.ndarray = np.array([])
+    input_image: np.ndarray = None
+    input_keypoints: list = None
+    input_descriptors: np.ndarray = None  
+    queryImg_path: str = None
+    templateImg_path: str = None
+    query_image: np.ndarray = None
+    template_image: np.ndarray = None
+    query_keypoints: list = None
+    query_descriptors: np.ndarray = None
+    template_keypoints: list = None
+    template_descriptors: np.ndarray = None
+    matches: list = None
+    aligned_image: np.ndarray = None
+    
+
+    def __init__(self,clsname: str = None,memberList: list = None) -> None:
+        self._data = None
+        print('DataClass =>')
+        if clsname is None:
+            raise Exception('[{}] `clsname` can not be None !'.format(self.__class__.__name__))
+        print('clsname => ' + clsname)
+
+        if memberList is None:
+            raise Exception('[{}] `memberList` can not be None !'.format(self.__class__.__name__))
+        
+        attrs = get_type_hints(Data)
+        memberType = []
+        memberValue = []
+
+        for item in memberList:
+            print('memer => '+ str(item))
+            #check if the member us valid 
+            if not hasattr(Data,item[0]):
+                raise Exception('[{}]: `{}` is not valid ! '.format(self.__class__.__name__,item[0]))
+            
+            if item[1] is not None:
+                #check if the member datatype is valid 
+                if not (attrs[item[0]] == type(item[1])):
+                    print('true datatype => '+str(type(item[1])))
+                    raise Exception('[{}] `{}` is not {} !'.format(self.__class__.__name__,item[0],attrs[item[0]]))
+
+                #datatype and values correction 
+                
+                print('item[1] is not None =>')
+                if type(item[1]).__name__ == 'str':
+                    dataType = str
+                elif  type(item[1]).__name__ == 'list':
+                    dataType = list 
+                elif type(item[1]).__name__ == 'np.ndarray':
+                    dataType = np.ndarray
+                else:
+                    raise Exception('[{}]: Datatype `{}` is not valid ! '.format(self.__class__.__name__,type(item[1]).__name__))
+                    
+            memberType.append((item[0],dataType))
+            memberValue.append((item[0],item[1]))
+
+        # create new dataclass with member datatype and values
+        self._data = make_dataclass(clsname,memberType)
+        for value in memberValue:
+            setattr(self._data,value[0],value[1])
+        
+        
+        print('self._data => '+str(self._data))
+ 
+    def get_data(self):
+        return self._data
+  
 
     @classmethod
     def check_exists(cls,field_name):
@@ -289,9 +348,7 @@ class Data:
             raise Exception('[{}]: The field is not existed ! '.format(cls.__name__))
 
         if not isinstance(field_name,field_type):
-            raise Exception('[{}]: Datatype {} is incorrect ! '.format(cls.__name__,field_type))
-      
-        # print('[{}]: Datatype {} is correct !'.format(cls.__name__,field_type))
+            raise Exception('[{}]: Datatype `{}` is incorrect ! '.format(cls.__name__,field_type))
             
 
 class LocalFeaturesPairs:
@@ -329,6 +386,7 @@ class LocalFeaturesPairs:
 
 
 
+
 if __name__ == '__main__':
     """
     experiment pipeline for image registration
@@ -338,12 +396,22 @@ if __name__ == '__main__':
     # Just load an image
     _LoadImageData = make_dataclass('LoadImageData',[('img_path',str),('input_image',np.ndarray)])
     _LoadImageData = _LoadImageData(img_path='./image/box.png',input_image=None)
-    # print(asdict(_LoadImageData))
+    print(asdict(_LoadImageData))
     processes = [LoadImage]
     vision_pipeline = PipelineBase(processes)
     _LoadImageData = vision_pipeline.execute(_LoadImageData)
     print('LoadImageData => '+str(_LoadImageData))
-    
+
+    _DATA = Data('LoadImageData2',[('img_path','./image/box.png'),('input_image',None)])
+    print('_DATA=> '+ str(_DATA))
+    _DATA = _DATA.get_data()
+    print('item => '+ str(str(_DATA)))
+
+    vision_pipeline = PipelineBase(processes)
+    _DATA = vision_pipeline.execute(_DATA)
+    print('_DATA => '+str(_DATA))
+  
+    """
     # Just extract keypoints and descriptors from the previously loaded image  
     _FeatureExtractionData = make_dataclass('FeatureExtractionData',[('input_image',np.ndarray),('input_keypoints',list),('input_descriptors',np.ndarray)])
     _FeatureExtractionData = _FeatureExtractionData(input_image=_LoadImageData.input_image,input_keypoints=None,input_descriptors=None)
@@ -376,7 +444,7 @@ if __name__ == '__main__':
     # Display().show_matches(PairData.matches)
   
    
-    
+    """
 
 
 
