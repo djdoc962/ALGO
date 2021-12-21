@@ -204,7 +204,7 @@ class FeatureExtraction:
             raise Exception('[{}] `input_image` can not be found ! '.format(self.__class__.__name__)) 
 
         print('[{}] Feature extraction is started ...'.format(self.__class__.__name__))    
-        (keypoints, descrips) = self.get_keypoint(data.input_image,maxFeatures=self.maxFeatures,method = self.method)
+        (keypoints, descrips) = self.get_keypoint(data.input_image,maxFeatures=self.maxFeatures,method=self.method)
         data.input_keypoints = keypoints
         data.input_descriptors = descrips   
 
@@ -231,7 +231,7 @@ class FeatureExtraction:
             print('[{}] It is a color image, will be converted to gray image.'.format(self.__class__.__name__))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) 
         
-        if self.method == 0:
+        if method == 0:
             orb = cv2.ORB_create(maxFeatures)
             (keypoints, descrips) = orb.detectAndCompute(image, None)
         else:    
@@ -322,6 +322,12 @@ class Data:
             raise Exception('[{}] `clsname` can not be None !'.format(self.__class__.__name__))
         if memberList is None:
             raise Exception('[{}] `memberList` can not be None !'.format(self.__class__.__name__))
+        
+        if not Data.check_type(clsname, str):
+            raise Exception('[{}] `clsname` must be {} ! '.format(self.__class__.__name__,type(str)))
+
+        if not Data.check_type(memberList, list):
+            raise Exception('[{}] `memberList` must be {} ! '.format(self.__class__.__name__,type(list))) 
         
         memberType = []
         memberValue = []
