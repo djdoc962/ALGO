@@ -2,8 +2,8 @@ import os,datetime
 import cv2
 from feature_extraction import FeatureExtraction, ImageAlignment, Display
 
-img_path = "./image/table4.jpg"
-template_path = "./image/template.jpg"
+img_path = "./image/insurance_query.jpg"
+template_path = "./image/insurance_template.jpg"
 maxFeatures = 200
 keepPercent = 0.5
 print('[START] image alignment is started ')
