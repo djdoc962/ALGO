@@ -383,9 +383,7 @@ class Data:
             return False
         return True
 
-        
-            
-
+               
 class LocalFeaturesPairs:
     def __init__(self, maxFeatures: int = 200, method:int = 1) -> None:
         self.maxFeatures = maxFeatures

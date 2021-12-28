@@ -1,6 +1,6 @@
 # Introduction
 
-電腦視覺的常需要採用模型識別(pattern recognition)
+電腦視覺的常需要採用模型識別(pattern recognition)。
 
 
 # Algorithms
@@ -27,7 +27,7 @@ FAST如其名比其他角點偵測演算法速度更快，將角點的定義為�
 ### Descriptors(特徵描述子):
 從keypoints(關鍵點)的局部區域計算出特徵向量
 1. SIFT(Scale-Invariant Feature Transform):
-   第一個被提出的尺度不變性(Scale-Invariant)演算法，發表在1999年的國際頂級會議ICCV，至今還是在CV領域被廣泛使用。SIFT使用尺度空間極值檢測(Scale-space Extrema Detection)找出具有尺度不變性的關鍵點位置，計算相鄰尺度間的difference-of-Gaussian求得區域最大或最小值(local maxima and minima)。其取得的特徵不會隨影像的尺寸變化和旋轉而被改變，對於亮度變化也能容忍，因此SIFT本身就包含尋找關鍵點(keypoints)的功能，在關鍵點的相鄰區域對於選定的尺度圖上使用histogram(直方圖)統計相鄰像素的gradient magnitude(梯度強度)和方向(8種方向)，最後取得`16*8=128維度的描述子`。[參考](https://docs.opencv.org/4.x/da/df5/tutorial_py_sift_intro.html)
+   第一個被提出的尺度不變性(Scale-Invariant)演算法，發表在1999年的國際頂級會議ICCV，至今還是在CV領域被廣泛使用。SIFT使用尺度空間極值檢測(Scale-space Extrema Detection)找出關鍵點，其取得的特徵不會隨影像的尺寸變化和旋轉而被改變，對於亮度變化也能容忍，SIFT本身就包含尋找關鍵點(keypoints)的功能，在關鍵點的相鄰區域對於選定的尺度圖上使用histogram(直方圖)統計相鄰像素的gradient magnitude(梯度強度)和方向(8種方向)，最後取得`16*8=128維度的描述子`。[參考](https://docs.opencv.org/4.x/da/df5/tutorial_py_sift_intro.html)
 
    <img src="./assets/SIFT.jpg" width="500" />
 
@@ -58,3 +58,33 @@ Opencv開發出來為了替開發者`省下`付給SIFT和SURF演算法的專利�
        透過旋轉矩陣(rotation matrix)計算出旋轉後的座標且算出特徵描述子。
 
     
+
+# Performance evaluation 
+
+基本上常見的指標(metrics)是基於每組影像的`正確匹配(correct matches)和錯誤匹配(false matches)數量做衡量`。實驗的測試影像如下圖中同場景但不同的變異因素，有縮放，旋轉，同時縮放旋轉，不同視點(viewpoint)，模糊，影像壓縮和光線的變異，商業應用場景比較常有縮放或旋轉的變異。
+<img src="./assets/Test_pairs.png" width="500" />
+
+
+1. Distance Ratio: 
+`演算法SIFT的作者D.Lowe`在Keypoint matching實驗中統計出radio of distance(closest/next closest)>0.8的pairs可以踢掉90%的false matches, 5%的correct matches.在OpenCV實作範例上使用差不多的0.7~0.75.範例。
+<img src="./assets/Ratio_distances.png" width="500" />
+
+2. ```
+   Repeatability(重複率) = #correspondences detected / #correspondences present
+   ```
+   ，重複率是指兩張要匹配的影像的相同區域中找到的對應關鍵點百分比，過程需要彼此透過homography的投影座標的比對來判斷彼此的對應關係(correspondences)，
+<img src="./assets/Repeatability2.png" width="500" /> 
+
+   [文獻](https://hal.inria.fr/inria-00548252/document)對於影像有仿射(affine)變異情境延伸對Repeatability的correspondences detected的判斷準則，相對座標距離誤差必須<1.5 pixels，影像region映射過去的非重疊區域要<0.2：
+<img src="./assets/Repeatability.png" width="500" />
+
+3. ```
+   Recall）(召回率) = #correct matches / #correspondences (the number of correspondences between two images)
+   ```
+
+4. ```
+   Precision(精確率) = #correct matches / #total positive matches(putative matches)，positive matches可以用1.的準則來判定。
+   ```
+5. ``` 
+   Average number of best matches = is the total number of correct matches from all images in a dataset divided by the number of images.
+   ```
