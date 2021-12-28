@@ -1,0 +1,39 @@
+from image_registration_pipeline import Data, Display, PipelineBase, LoadImage, LocalFeaturesPairs, FeatureExtraction, FeatureMatching, ImageAlignment
+from typing import Dict, List, Any, Union, Tuple, get_type_hints
+
+MAX_FEATURES = 30
+FEATURE_EXTRACTION = 0
+FEATURE_MATCHING = 0
+MATCHES_PERCENT = 0.5
+BASE_PATH = './outcome/'
+TEMPLATE_PATH = BASE_PATH + 'template_keypoints' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
+QUERY_PATH = BASE_PATH + 'query_keypoints' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
+MATCHES_PATH = BASE_PATH + 'matches' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
+
+print('[START] Experiment Pipeline testing ------------------------------')
+print('- Specified data list: ')
+print(get_type_hints(Data))
+## template image 
+template_data = Data('template_data',[('img_path','./image/box_in_scene.png'),('input_image',None),('input_keypoints',None),('input_descriptors',None)]).get_data()
+processes = [LoadImage,FeatureExtraction(maxFeatures=MAX_FEATURES,method=FEATURE_EXTRACTION)]
+vision_pipeline = PipelineBase(processes)
+template_data = vision_pipeline.execute(template_data)
+Display().draw_keypoints(template_data.input_image,template_data.input_keypoints,save_path=TEMPLATE_PATH)
+
+## query image 
+query_data = Data('query_data',[('img_path','./image/box.png'),('input_image',None),('input_keypoints',None),('input_descriptors',None)]).get_data()
+# print('_LoadImage_FeatureExtraction => '+str(query_data)) 
+processes = [LoadImage,FeatureExtraction(maxFeatures=MAX_FEATURES,method=FEATURE_EXTRACTION)]
+vision_pipeline = PipelineBase(processes)
+query_data = vision_pipeline.execute(query_data)
+Display().show_keypoints(query_data.input_keypoints)
+Display().show_descriptors(query_data.input_descriptors)
+
+#TODO draw keypoint on image
+Display().draw_keypoints(query_data.input_image,query_data.input_keypoints,save_path=QUERY_PATH)
+
+matches_data = Data('matches_data',[('query_descriptors',query_data.input_descriptors),('template_descriptors',template_data.input_descriptors)]).get_data()
+vision_pipeline = PipelineBase([FeatureMatching(keepPercent=MATCHES_PERCENT,method=FEATURE_MATCHING)])
+matches_data = vision_pipeline.execute(matches_data)
+Display().show_matches(matches_data.matches)
+Display().draw_matches(query_data.input_image,query_data.input_keypoints,template_data.input_image, template_data.input_keypoints, matches_data.matches, save_path=MATCHES_PATH)
