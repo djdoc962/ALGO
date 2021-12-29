@@ -6,10 +6,14 @@ import numpy as np
 
 class Display:
 
-    def draw_matches(self,query_image,kpsA,template_image, kpsB, matches, save_path: str = './draw_matches.png'):
+    def draw_matches(self,query_image,kpsA,template_image, kpsB, matches, mode: int = 0, save_path: str = './draw_matches.png'):
 
-        matchedVis = cv2.drawMatches(query_image, kpsA, template_image, kpsB,
-            matches, None)
+        if mode == 0:
+            matchedVis = cv2.drawMatches(query_image, kpsA, template_image, kpsB,
+                matches, None)
+        else:
+            matchedVis = cv2.drawMatchesKnn(query_image, kpsA, template_image, kpsB,
+                matches, None)
     
         scale_percent =  150 # percent of original size
         width = int(matchedVis.shape[1] * scale_percent / 100)
@@ -49,13 +53,14 @@ class Display:
         """
         print('matches length: {} ==================================================================='.format(len(matches)))
         for i, match in enumerate(matches):
-            print('[MATCHES]: {}, Idx of (Q,R): ({}, {})'.format(i,match.queryIdx,match.trainIdx))
+            print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(i,match.queryIdx,match.trainIdx,match.distance))
 
 
 class FeatureMatching:
-    def __init__(self,keepPercent: float = 0.5, method: int = 0) -> None:
+    def __init__(self,keepPercent: float = 0.5,filter: bool = True, method: int = 0) -> None:
         self.keepPercent = keepPercent
         self.method = method
+        self.filter = filter
 
     def execute(self, data: Any) -> Any:
         print('[{}] The processing of features matching is started ...'.format(self.__class__.__name__))
@@ -67,16 +72,29 @@ class FeatureMatching:
 
         
         matches = self.match(data.query_descriptors,data.template_descriptors, keepPercent=self.keepPercent,method=self.method)
+        #TODO: get better matches by checking if ratio of distances is less the threshold   
+        if self.filter:
+            print('Do good_matches started =>')
+            matches = self.good_matches(matches) 
+        
         data.matches = matches
         print('[{}] The processing of features matching is finished.'.format(self.__class__.__name__))
         return data
 
     @classmethod
     def good_matches(cls,matches):
+        """
+         compute putative correspondences with distance ratio
+         matches: DMatch object from OpenCV
+        """
+        print('[{}] To filter the matches using ratio of distance proposed by David Lowe ...'.format(cls.__name__))
+        #TODO: 可以自由選擇是否要過濾這些matches,觀察有無過濾後在後續的homography表現是否改善
+        good_threshold = 0.75
         # Apply ratio test as Lowe's paper
         good = []
-        for m,n in matches:
-            if m.distance < 0.75*n.distance:
+        for i,(m,n) in enumerate(matches):
+            print('get (m,n)')
+            if m.distance < good_threshold*n.distance:
                 good.append([m])
         return good
     
@@ -108,7 +126,7 @@ class FeatureMatching:
             #TODO: or get k best matches via knnMatch, which will be [[<DMatch>,<DMatch>],[<DMatch>,<DMatch>],...]
             method = cv2.DescriptorMatcher_FLANNBASED
             print('[{}] Using FLANN:{} '.format(cls.__name__,method))
-            matcher = cv2.DescriptorMatcher_create(method)
+            # matcher = cv2.DescriptorMatcher_create(method)
             # FLANN parameters
             FLANN_INDEX_KDTREE = 0
             # index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
@@ -120,7 +138,11 @@ class FeatureMatching:
             search_params = dict(checks=50)   # or pass empty dictionary
             flann = cv2.FlannBasedMatcher(index_params,search_params)
             matches = flann.knnMatch(descripA, descripB,k=K)
-      
+            # keep only the top matches
+            # keep = int(len(matches) * keepPercent)
+            # matches = matches[:keep]
+            
+        print(str(matches))
         return matches
 
 
