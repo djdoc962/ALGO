@@ -3,9 +3,9 @@ from typing import Dict, List, Any, Union, Tuple, get_type_hints
 
 MAX_FEATURES = 100
 FEATURE_EXTRACTION = 0
-FEATURE_MATCHING = 0
+FEATURE_MATCHING = 1
 MATCHES_PERCENT = 0.5
-MATCHES_FILTER = False
+MATCHES_FILTER = True
 BASE_PATH = './outcome/'
 TEMPLATE_PATH = BASE_PATH + 'template_keypoints' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
 QUERY_PATH = BASE_PATH + 'query_keypoints' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
@@ -36,5 +36,5 @@ Display().draw_keypoints(query_data.input_image,query_data.input_keypoints,save_
 matches_data = Data('matches_data',[('query_descriptors',query_data.input_descriptors),('template_descriptors',template_data.input_descriptors)]).get_data()
 vision_pipeline = PipelineBase([FeatureMatching(keepPercent=MATCHES_PERCENT,filter=MATCHES_FILTER, method=FEATURE_MATCHING)])
 matches_data = vision_pipeline.execute(matches_data)
-Display().show_matches(matches_data.matches)
-Display().draw_matches(query_data.input_image,query_data.input_keypoints,template_data.input_image, template_data.input_keypoints, matches_data.matches,mode=0, save_path=MATCHES_PATH)
+Display().show_matches(matches_data.matches,mode=FEATURE_MATCHING)
+Display().draw_matches(query_data.input_image,query_data.input_keypoints,template_data.input_image, template_data.input_keypoints, matches_data.matches,mode=FEATURE_MATCHING, save_path=MATCHES_PATH)

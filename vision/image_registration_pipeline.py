@@ -4,6 +4,35 @@ import inspect
 import cv2
 import numpy as np
 
+
+
+class Evaluation:
+    def __init__(self) -> None:
+        print('[{}] The processing of evaluation is started ...'.format(self.__class__.__name__))
+
+    def execute(self, data: Any) -> Any:
+        print('[{}] The processing of evaluation is started ...'.format(self.__class__.__name__))
+
+    def precision(self) -> Any:
+        """
+        Precision = 模板影像的關鍵點中也被認定為正確匹配的組別數目/自動判定為正確對應(correspondance)的組別數目，也俗稱putative matches。
+        """
+        print('[{}] Calculating the precision is started ...'.format(self.__class__.__name__))
+
+    def recall(self) -> Any:
+        """
+        Recall = 模板影像的關鍵點中也被認定為正確匹配的組別數目/模板影像的關鍵點數目+沒有匹配成功的關鍵點數目
+        """
+        print('[{}] Calculating the recall is started ...'.format(self.__class__.__name__))
+
+    def repeatability(self) -> Any:
+        """
+        Repeatability = 模板影像的關鍵點中也被認定為正確匹配的組別數目/模板影像與查詢影像的關鍵點數目較小的數目
+        """
+        print('[{}] Calculating the repeatability started ...'.format(self.__class__.__name__))
+
+
+    
 class Display:
 
     def draw_matches(self,query_image,kpsA,template_image, kpsB, matches, mode: int = 0, save_path: str = './draw_matches.png'):
@@ -42,7 +71,7 @@ class Display:
         for i, feature in  enumerate(descriptors):
             print('[DESCRIPTORS]: {}, feature: {}'.format(i,feature[:]))
 
-    def show_matches(self,matches):
+    def show_matches(self,matches,mode=0):
         """
         matches: DMatch object from OpenCV
         match.trainIdx: Index of the descriptor in train descriptors
@@ -52,8 +81,15 @@ class Display:
         TODO: knnMatch, will be [[<DMatch>,<DMatch>],[<DMatch>,<DMatch>],...]
         """
         print('matches length: {} ==================================================================='.format(len(matches)))
-        for i, match in enumerate(matches):
-            print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(i,match.queryIdx,match.trainIdx,match.distance))
+        # print(str(matches))
+        if mode == 0:
+            for i, match in enumerate(matches):
+                print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(i,match.queryIdx,match.trainIdx,match.distance))
+        else:
+            for j, match in enumerate(matches):
+                for item in match:  
+                    print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(j,item.queryIdx,item.trainIdx,item.distance))
+        
 
 
 class FeatureMatching:
@@ -75,27 +111,36 @@ class FeatureMatching:
         #TODO: get better matches by checking if ratio of distances is less the threshold   
         if self.filter:
             print('Do good_matches started =>')
-            matches = self.good_matches(matches) 
-        
+            if self.method:
+                matches = self.good_matches(matches,self.method) 
+            else:
+                print('[{}] Warning: matching method: BRUTEFORCE_HAMMING can not do ratio test !'.format(self.__class__.__name__))
+
         data.matches = matches
         print('[{}] The processing of features matching is finished.'.format(self.__class__.__name__))
         return data
 
     @classmethod
-    def good_matches(cls,matches):
+    def good_matches(cls,matches,mode=0):
         """
          compute putative correspondences with distance ratio
          matches: DMatch object from OpenCV
         """
         print('[{}] To filter the matches using ratio of distance proposed by David Lowe ...'.format(cls.__name__))
         #TODO: 可以自由選擇是否要過濾這些matches,觀察有無過濾後在後續的homography表現是否改善
+        print(str(matches))
         good_threshold = 0.75
         # Apply ratio test as Lowe's paper
         good = []
-        for i,(m,n) in enumerate(matches):
-            print('get (m,n)')
+        for i, pair in enumerate(matches):
+            if len(pair) < 2:
+                continue # you don't have the second element to compare against
+            m,n = pair
             if m.distance < good_threshold*n.distance:
-                good.append([m])
+                if mode == 0:
+                    good.append([m])
+                else:
+                    good.append([m,n])
         return good
     
     @classmethod
@@ -128,8 +173,9 @@ class FeatureMatching:
             print('[{}] Using FLANN:{} '.format(cls.__name__,method))
             # matcher = cv2.DescriptorMatcher_create(method)
             # FLANN parameters
-            FLANN_INDEX_KDTREE = 0
+            # FLANN_INDEX_KDTREE = 0
             # index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+
             FLANN_INDEX_LSH = 6
             index_params= dict(algorithm = FLANN_INDEX_LSH,
                    table_number = 6, # 12
@@ -164,6 +210,11 @@ class ImageAlignment:
             ptsA[i] = KptA[m.queryIdx].pt
             ptsB[i] = KptB[m.trainIdx].pt
         return ptsA, ptsB
+
+    @classmethod
+    def project_coordinates(cls):
+        print('[{}] The processing of project_coordinates is started ...'.format(cls.__name__))
+       
 
     @classmethod
     def find_homography(cls,kpsA, kpsB, matches, method=0):
@@ -510,8 +561,8 @@ if __name__ == '__main__':
     # Display().show_keypoints(_LoadImage_FeatureExtraction.input_keypoints)
     
     #EX4. A pairs of image features generated by LocalFeaturesPairs, then do feature matching and alignment 
-    PairData = Data('PairData',[('queryImg_path','./image/insurance_query.jpg'),('templateImg_path','./image/insurance_template.jpg')]).get_data()
-    vision_pipeline = PipelineBase([LocalFeaturesPairs(maxFeatures=200,method=0),FeatureMatching(keepPercent=0.5,method=0),ImageAlignment])
+    PairData = Data('PairData',[('queryImg_path','./image/box.png'),('templateImg_path','./image/box_in_scene.png')]).get_data()
+    vision_pipeline = PipelineBase([LocalFeaturesPairs(maxFeatures=200,method=0),FeatureMatching(keepPercent=0.5,method=0,filter=False),ImageAlignment])
     PairData = vision_pipeline.execute(PairData)
     # print('PairData => ')
     # Display().show_keypoints(PairData.query_keypoints)
