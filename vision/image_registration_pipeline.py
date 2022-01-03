@@ -9,10 +9,16 @@ import numpy as np
 class Evaluation:
     def __init__(self) -> None:
         print('[{}] The processing of evaluation is started ...'.format(self.__class__.__name__))
+        self.template_kps_number = None
+        self.query_kps_number = None
+        self.correct_matches_number = None
+        self.good_matches_number = None
+        self.FN_number = None
 
     def execute(self, data: Any) -> Any:
         print('[{}] The processing of evaluation is started ...'.format(self.__class__.__name__))
-
+        #TODO: 計算qury image的關鍵點投影到template image座標系的座標 project_coordinates(kps,H) 與模板的關鍵點座標誤差找到對應的關鍵點
+    
     def precision(self) -> Any:
         """
         Precision = 模板影像的關鍵點中也被認定為正確匹配的組別數目/自動判定為正確對應(correspondance)的組別數目，也俗稱putative matches。
@@ -35,14 +41,31 @@ class Evaluation:
     
 class Display:
 
-    def draw_matches(self,query_image,kpsA,template_image, kpsB, matches, mode: int = 0, save_path: str = './draw_matches.png'):
-
+    def draw_matches(self,query_image,kpsA,template_image, kpsB, matches, mode: int = 0, matchesMask:list = None, save_path: str = './draw_matches.png'):
+     
         if mode == 0:
+            draw_params = dict(matchColor = (0,255,0), # draw matches in green color
+                singlePointColor = None,
+                matchesMask = matchesMask, # draw only inliers
+                flags = 2)
+    
             matchedVis = cv2.drawMatches(query_image, kpsA, template_image, kpsB,
-                matches, None)
+                matches, None,**draw_params)
         else:
+            if not isinstance(matches[0],list):
+                matches = [ [match] for match in matches]
+            # print('matches => '+str(matches))
+            if matchesMask is not None:
+                matchesMask = [ [item] for item in matchesMask]
+                # print('matchesMask => '+str(matchesMask))
+            draw_params = dict(matchColor = (0,255,0), # draw matches in green color
+                singlePointColor = None,
+                matchesMask = matchesMask, # draw only inliers
+                flags = 2)
+    
+
             matchedVis = cv2.drawMatchesKnn(query_image, kpsA, template_image, kpsB,
-                matches, None)
+                matches, None,**draw_params)
     
         scale_percent =  150 # percent of original size
         width = int(matchedVis.shape[1] * scale_percent / 100)
@@ -82,14 +105,19 @@ class Display:
         """
         print('matches length: {} ==================================================================='.format(len(matches)))
         # print(str(matches))
-        if mode == 0:
-            for i, match in enumerate(matches):
-                print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(i,match.queryIdx,match.trainIdx,match.distance))
-        else:
-            for j, match in enumerate(matches):
-                for item in match:  
-                    print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(j,item.queryIdx,item.trainIdx,item.distance))
-        
+        # if mode == 0:
+        #     for i, match in enumerate(matches):
+        #         print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(i,match.queryIdx,match.trainIdx,match.distance))
+        # else:
+        #     for i, match in enumerate(matches):
+        #         for item in match:  
+        #             print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(i,item.queryIdx,item.trainIdx,item.distance))
+        for i, match in enumerate(matches):
+            print(match)
+            if isinstance(match,list):
+                match = match[0]
+            print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(i,match.queryIdx,match.trainIdx,match.distance))
+       
 
 
 class FeatureMatching:
@@ -114,7 +142,7 @@ class FeatureMatching:
             if self.method:
                 matches = self.good_matches(matches,self.method) 
             else:
-                print('[{}] Warning: matching method: BRUTEFORCE_HAMMING can not do ratio test !'.format(self.__class__.__name__))
+                print('[{}] Warning: only FLANN-based matching can do ratio test !'.format(self.__class__.__name__))
 
         data.matches = matches
         print('[{}] The processing of features matching is finished.'.format(self.__class__.__name__))
@@ -137,10 +165,9 @@ class FeatureMatching:
                 continue # you don't have the second element to compare against
             m,n = pair
             if m.distance < good_threshold*n.distance:
-                if mode == 0:
-                    good.append([m])
-                else:
-                    good.append([m,n])
+                good.append(m)
+    
+        print('good =>'+str(good))
         return good
     
     @classmethod
@@ -201,6 +228,8 @@ class ImageAlignment:
         ptsA: coordinates of image A
         ptsB: coordinates of image B
         """
+        # print('matches => ')
+        # print(str(matches))
         ptsA = np.zeros((len(matches), 2), dtype="float")
         ptsB = np.zeros((len(matches), 2), dtype="float")
         # loop over the top matches
@@ -212,15 +241,19 @@ class ImageAlignment:
         return ptsA, ptsB
 
     @classmethod
-    def project_coordinates(cls,image, M):
-        """ 可能要檢查是否有>=4個pair的matches
+    def project_coordinates(cls, kps, M):
+        """ 
         """
         print('[{}] The processing of project_coordinates is started ...'.format(cls.__name__))
-        h,w = image
-        pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-        dst = cv2.perspectiveTransform(pts,M)
+        # h,w = image
+        # pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+        pts = np.float32(kps).reshape(-1,1,2)
+        dst_pts = cv2.perspectiveTransform(pts,M)
+
+        print('get dst => '+str(dst_pts.shape))
+        print(str(dst_pts))
         # img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.LINE_AA)
-       
+        return dst_pts
 
     @classmethod
     def find_homography(cls,kpsA, kpsB, matches, method=0):
@@ -245,11 +278,11 @@ class ImageAlignment:
             raise Exception('[{}] `kpsA` can not be found !'.format(cls.__name__))
         if kpsB is None:
             raise Exception('[{}] `kpsB` can not be found !'.format(cls.__name__))
-        
+       
         ptsA, ptsB = cls.Match2Keypoint(matches,kpsA,kpsB)
         (H, mask) = cv2.findHomography(ptsA, ptsB, method=method)
         print('[{}] The processing of homography calculation is done.'.format(cls.__name__))
-        return H
+        return H, mask
 
     @classmethod
     def wrap(self, image, H, size ):
@@ -263,6 +296,7 @@ class ImageAlignment:
         return wraped
 
     def execute(self, data: Any) -> Any:
+        MIN_MATCH_COUNT = 4
         print('[{}] Image alignment is started ...'.format(self.__class__.__name__)) 
         if not Data.check_type(data.query_image,np.ndarray):
             raise Exception('[{}] `query_image` must be {} !'.format(self.__class__.__name__,Data.get_type('query_image')))
@@ -279,12 +313,17 @@ class ImageAlignment:
         if not Data.check_type(data.matches,list):
             raise Exception('[{}] `matches` must be {} !'.format(self.__class__.__name__,Data.get_type('matches')))
 
-
-        H_matrix = ImageAlignment.find_homography(data.query_keypoints , data.template_keypoints, data.matches)
-        aligned_img = self.wrap(data.query_image, H_matrix, LoadImage().get_size(data.template_image) )
-        print('[{}] Image alignment is finished.'.format(self.__class__.__name__)) 
-        WriteImage().execute(aligned_img, save_path = './aligned.png')
-        data.aligned_image = aligned_img
+        if len(data.matches) >= MIN_MATCH_COUNT:
+            H_matrix, mask = ImageAlignment.find_homography(data.query_keypoints , data.template_keypoints, data.matches)
+            matchesMask = mask.ravel().tolist() 
+            aligned_img = self.wrap(data.query_image, H_matrix, LoadImage().get_size(data.template_image) )
+            print('[{}] Image alignment is finished.'.format(self.__class__.__name__)) 
+            WriteImage().execute(aligned_img, save_path = './aligned.png')
+            data.homography = H_matrix
+            data.aligned_image = aligned_img
+            data.matchesMask = matchesMask
+        else:
+            raise Exception('[{}] `Minimum {} corresponding points` are required, only have {} !'.format(self.__class__.__name__,len(MIN_MATCH_COUNT),len(data.matches)))
         
         return data
 
