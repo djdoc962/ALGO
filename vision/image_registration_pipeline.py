@@ -8,17 +8,74 @@ import numpy as np
 
 class Evaluation:
     def __init__(self) -> None:
-        print('[{}] The processing of evaluation is started ...'.format(self.__class__.__name__))
+        """
+        TP = correct_matches_number
+        FP+FP = putative_matches_number 
+        """
+        print('[{}] The processing of evaluation.init() is started ...'.format(self.__class__.__name__))
         self.template_kps_number = None
         self.query_kps_number = None
         self.correct_matches_number = None
-        self.good_matches_number = None
+        self.putative_matches_number = None
         self.FN_number = None
 
+    @classmethod
+    def keypoints2List(cls,kps) -> np.ndarray:
+        kps_list = []
+        for i, keypoint in enumerate(kps):
+            kps_list.append([keypoint.pt[0],keypoint.pt[1]])
+
+        print('keypoints2List get {} kps => {}'.format(len(kps_list),str(kps_list)))
+        # pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+        pts = np.float32(kps_list).reshape(-1,1,2)
+        return pts
+
+    @classmethod
+    def project_coordinates(cls, kps, M) -> list:
+        """ 
+        """
+        print('[{}] The processing of project_coordinates is started ...'.format(cls.__name__))
+        pts = cls.keypoints2List(kps)
+        
+        #TODO kps convert to list
+        # h,w = image
+      
+        dst_pts = cv2.perspectiveTransform(pts,M)
+
+        print('get dst => '+str(dst_pts.shape))
+        print(str(dst_pts))
+        # img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.LINE_AA)
+        return dst_pts
+
+    @classmethod
+    def coordinates2Keypoints(cls,pts) -> list:    
+        keypoints = [cv2.KeyPoint(x[0][0], x[0][1],1) for x in pts]
+        # Display().show_keypoints(keypoints)
+        return keypoints
+
+
+    # @classmethod
+    # def distance(cls,pts) -> list: 
+    
+
     def execute(self, data: Any) -> Any:
+        ERROR = 1.5
         print('[{}] The processing of evaluation is started ...'.format(self.__class__.__name__))
         #TODO: 計算qury image的關鍵點投影到template image座標系的座標 project_coordinates(kps,H) 與模板的關鍵點座標誤差找到對應的關鍵點
-    
+        dst_pts = self.project_coordinates(data.query_keypoints,data.homography)
+        print('get destination coordinates : ' + str(dst_pts.shape))
+        img = data.template_image.copy()
+        template_pts = self.keypoints2List(data.template_keypoints)
+        print('template_pts => '+str(template_pts))
+        # self.coordinates2Keypoints(dst_pts)
+
+        print('[{}] The processing of evaluation is done.'.format(self.__class__.__name__))
+        for item in dst_pts:
+            cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(0,255,0))
+        
+        cv2.imshow('destination keypoints on image', img)
+        cv2.waitKey(0)
+
     def precision(self) -> Any:
         """
         Precision = 模板影像的關鍵點中也被認定為正確匹配的組別數目/自動判定為正確對應(correspondance)的組別數目，也俗稱putative matches。
@@ -75,8 +132,8 @@ class Display:
         
         matchedVis = cv2.resize(matchedVis, dim)
         WriteImage().execute(matchedVis,save_path)
-        cv2.imshow("Matched Keypoints..", matchedVis)
-        cv2.waitKey(0)
+        # cv2.imshow("Matched Keypoints..", matchedVis)
+        # cv2.waitKey(0)
 
 
     def draw_keypoints(self, image, keypoints, save_path: str = './draw_keypoints.png'):
@@ -113,7 +170,6 @@ class Display:
         #         for item in match:  
         #             print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(i,item.queryIdx,item.trainIdx,item.distance))
         for i, match in enumerate(matches):
-            print(match)
             if isinstance(match,list):
                 match = match[0]
             print('[MATCHES]: {}, Idx of (Q,R), distance: ({}, {}) {}'.format(i,match.queryIdx,match.trainIdx,match.distance))
@@ -222,7 +278,7 @@ class FeatureMatching:
 class ImageAlignment:
 
     @classmethod
-    def Match2Keypoint(cls,matches,KptA,KptB):
+    def match2Keypoint(cls,matches,KptA,KptB):
         """
         get matching keypoints for each of the images
         ptsA: coordinates of image A
@@ -240,21 +296,7 @@ class ImageAlignment:
             ptsB[i] = KptB[m.trainIdx].pt
         return ptsA, ptsB
 
-    @classmethod
-    def project_coordinates(cls, kps, M):
-        """ 
-        """
-        print('[{}] The processing of project_coordinates is started ...'.format(cls.__name__))
-        # h,w = image
-        # pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-        pts = np.float32(kps).reshape(-1,1,2)
-        dst_pts = cv2.perspectiveTransform(pts,M)
-
-        print('get dst => '+str(dst_pts.shape))
-        print(str(dst_pts))
-        # img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.LINE_AA)
-        return dst_pts
-
+  
     @classmethod
     def find_homography(cls,kpsA, kpsB, matches, method=0):
         """
@@ -279,7 +321,7 @@ class ImageAlignment:
         if kpsB is None:
             raise Exception('[{}] `kpsB` can not be found !'.format(cls.__name__))
        
-        ptsA, ptsB = cls.Match2Keypoint(matches,kpsA,kpsB)
+        ptsA, ptsB = cls.match2Keypoint(matches,kpsA,kpsB)
         (H, mask) = cv2.findHomography(ptsA, ptsB, method=method)
         print('[{}] The processing of homography calculation is done.'.format(cls.__name__))
         return H, mask
@@ -458,6 +500,8 @@ class Data:
     template_descriptors: np.ndarray = None
     matches: list = None
     aligned_image: np.ndarray = None
+    homography: np.ndarray = None
+    # matchesMask: any = None
     handles: object = None
     
 

@@ -1,5 +1,6 @@
-from image_registration_pipeline import Data, Display, PipelineBase, LoadImage, LocalFeaturesPairs, FeatureExtraction, FeatureMatching, ImageAlignment
+from image_registration_pipeline import Data, Display, PipelineBase, LoadImage, LocalFeaturesPairs, FeatureExtraction, FeatureMatching, ImageAlignment, Evaluation
 from typing import Dict, List, Any, Union, Tuple, get_type_hints
+
 
 MAX_FEATURES = 100
 # ORB: 0,
@@ -9,8 +10,8 @@ FEATURE_MATCHING = 0
 MATCHES_PERCENT = 0.5
 MATCHES_FILTER = True
 BASE_PATH = './outcome/'
-TEMPLATE_PATH = BASE_PATH + 'template_keypoints' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
-QUERY_PATH = BASE_PATH + 'query_keypoints' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
+TEMPLATE_PATH = BASE_PATH + 'template_keypoints_' + str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
+QUERY_PATH = BASE_PATH + 'query_keypoints_' + str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
 MATCHES_PATH = BASE_PATH + 'matches_' +str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
 
 print('[START] Experiment Pipeline testing ------------------------------')
@@ -41,3 +42,7 @@ matches_data = vision_pipeline.execute(matches_data)
 print('matchesMask => '+ str(matches_data.matchesMask))
 Display().show_matches(matches_data.matches,mode=FEATURE_MATCHING)
 Display().draw_matches(query_data.input_image, query_data.input_keypoints, template_data.input_image, template_data.input_keypoints, matches_data.matches, mode=FEATURE_MATCHING,matchesMask=None, save_path=MATCHES_PATH)
+
+evaluation_data = Data('evaluation_data',[('template_image',template_data.input_image),('template_keypoints',template_data.input_keypoints),('query_keypoints',query_data.input_keypoints),('homography',matches_data.homography)]).get_data()
+vision_pipeline = PipelineBase([Evaluation])
+evaluation_data = vision_pipeline.execute(evaluation_data)
