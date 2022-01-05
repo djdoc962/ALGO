@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict, make_dataclass, is_dataclass
 import inspect
 import cv2
 import numpy as np
+from skimage.draw import line
 
 
 
@@ -21,11 +22,13 @@ class Evaluation:
 
     @classmethod
     def keypoints2List(cls,kps) -> np.ndarray:
+        """ convert Kepoints to numpy array for perspetive transform
+        """
         kps_list = []
         for i, keypoint in enumerate(kps):
             kps_list.append([keypoint.pt[0],keypoint.pt[1]])
 
-        print('keypoints2List get {} kps => {}'.format(len(kps_list),str(kps_list)))
+        # print('keypoints2List get {} kps => {}'.format(len(kps_list),str(kps_list)))
         # pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
         pts = np.float32(kps_list).reshape(-1,1,2)
         return pts
@@ -33,48 +36,132 @@ class Evaluation:
     @classmethod
     def project_coordinates(cls, kps, M) -> list:
         """ 
+        To project the keypoints coordinates to the template image using perspective transform 
         """
         print('[{}] The processing of project_coordinates is started ...'.format(cls.__name__))
         pts = cls.keypoints2List(kps)
-        
-        #TODO kps convert to list
-        # h,w = image
-      
         dst_pts = cv2.perspectiveTransform(pts,M)
-
         print('get dst => '+str(dst_pts.shape))
-        print(str(dst_pts))
-        # img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.LINE_AA)
+        # print(str(dst_pts))
         return dst_pts
 
     @classmethod
-    def coordinates2Keypoints(cls,pts) -> list:    
+    def coordinates2Keypoints(cls,pts) -> list:
+        """
+        To convert coordinates to KeyPoint object
+        """    
         keypoints = [cv2.KeyPoint(x[0][0], x[0][1],1) for x in pts]
         # Display().show_keypoints(keypoints)
         return keypoints
 
+  
+    @classmethod
+    def bresenham(cls,x1,y1,x2,y2) -> list:
+        coordinates = []
+        m_new = 2 * (y2 - y1)
+        slope_error_new = m_new - (x2 - x1)
+    
+        y=y1
 
-    # @classmethod
-    # def distance(cls,pts) -> list: 
+        for x in range(x1,x2+1):
+            coordinates.append([x,y])
+            # print("(",x ,",",y ,")\n")
+    
+            # Slope error reached limit, time to
+            # increment y and update slope error.
+            if (slope_error_new >= 0):
+                y=y+1
+                slope_error_new =slope_error_new - 2 * (x2 - x1)
+            
+            # Add slope to increment angle formed
+            slope_error_new =slope_error_new + m_new
+        
+        return coordinates
+
+    @classmethod
+    def get_correspondance(cls,ptsA,ptsB,err) -> list:
+        """ 
+        get correspondance between template image and aligned query image using distance in pixels
+        ptsA: numpy array of projected keypoints coordinates from query image
+        ptsB: numpy array of keypoints coordinates from template image
+        """ 
+        print('[{}] The processing of correspondance is started ...'.format(cls.__name__))
+        # dx = x1 - x2;
+        # dy = y1 - y2;
+        # dist = sqrt(dx * dx + dy * dy);
+       
+        cls.template_kps_number = len(ptsB)
+        cls.query_kps_number = len(ptsA)
+
+        correspondance = []
+        
+        for keypointA in ptsA:
+            for keypointB in ptsB:
+                rr, cc = line(int(keypointA[0][0]),int(keypointA[0][1]),int(keypointB[0][0]),int(keypointB[0][1]))
+                # print('scikit pixels {} =>'.format(len(list(zip(rr,cc)))))
+                if len(list(zip(rr,cc))) < err:
+                    correspondance.append([keypointB,keypointA])
+
+        cls.correct_matches_number = len(correspondance)
+        print('[{}] The processing of correspondance is done.'.format(cls.__name__))
+        return correspondance
+
+        
     
 
     def execute(self, data: Any) -> Any:
         ERROR = 1.5
         print('[{}] The processing of evaluation is started ...'.format(self.__class__.__name__))
-        #TODO: 計算qury image的關鍵點投影到template image座標系的座標 project_coordinates(kps,H) 與模板的關鍵點座標誤差找到對應的關鍵點
-        dst_pts = self.project_coordinates(data.query_keypoints,data.homography)
-        print('get destination coordinates : ' + str(dst_pts.shape))
-        img = data.template_image.copy()
-        template_pts = self.keypoints2List(data.template_keypoints)
-        print('template_pts => '+str(template_pts))
-        # self.coordinates2Keypoints(dst_pts)
+        if not Data.check_exists(data,'matches'):
+            raise Exception('[{}] `matches` can not be found ! '.format(self.__class__.__name__))
 
-        print('[{}] The processing of evaluation is done.'.format(self.__class__.__name__))
-        for item in dst_pts:
-            cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(0,255,0))
+        if not Data.check_type(data.matches,list):
+            raise Exception('[{}] `matches` must be {} !'.format(self.__class__.__name__,Data.get_type('matches')))
         
-        cv2.imshow('destination keypoints on image', img)
-        cv2.waitKey(0)
+        # TODO: 若沒經過篩選處理過，全部matches就是為正確的
+        self.putative_matches_number = len(data.matches)
+        #TODO: 計算qury image的關鍵點投影到template image座標系的座標 project_coordinates(kps,H) 與模板的關鍵點座標誤差找到對應的關鍵點
+        projQueryPts = self.project_coordinates(data.query_keypoints,data.homography)
+        # print('get destination coordinates : ' + str(projQueryPts.shape))
+       
+        projTemplatePts = self.project_coordinates(data.template_keypoints,data.homography)
+     
+        img = data.template_image.copy()
+        templatePts = self.keypoints2List(data.template_keypoints)
+        for item in templatePts:
+            cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(0,255,0))
+
+        WriteImage().execute(img,'./outcome/origin_template.png')
+        for item in projTemplatePts:
+            cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(0,0,255))
+        
+        WriteImage().execute(img,'./outcome/project_template.png')
+        for item in projQueryPts:
+            cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(255,0,0))
+        
+        WriteImage().execute(img,'./outcome/project_query_template.png')
+        # cv2.imshow('destination keypoints on image', img)
+        # cv2.waitKey(0)
+        print('- query image has {} coordinates'.format(len(projQueryPts)))
+        print('- template image has {} coordinates '.format(len(templatePts)))
+        print('- distance must less than {} pixels '.format(ERROR))
+
+        corrs_pts = self.get_correspondance(projQueryPts,templatePts,ERROR)
+        self.FN_number = len(data.matches) - len(corrs_pts)
+        print('- False Negative matches is {}'.format(self.FN_number))
+        print('- putative matches is {}'.format(self.putative_matches_number))
+        print('- correct matches is {}'.format(len(corrs_pts)))
+       
+        self.putative_matches_number
+        img = data.template_image.copy()
+        for pair in corrs_pts:
+            R,Q = pair
+            cv2.circle(img,(int(R[0][0]),int(R[0][1])),2,(255,0,0))
+            cv2.circle(img,(int(Q[0][0]),int(Q[0][1])),4,(0,0,255))
+
+        WriteImage().execute(img,'./outcome/correspondances.png')   
+        print('[{}] The processing of evaluation is done.'.format(self.__class__.__name__)) 
+
 
     def precision(self) -> Any:
         """
@@ -207,12 +294,12 @@ class FeatureMatching:
     @classmethod
     def good_matches(cls,matches,mode=0):
         """
-         compute putative correspondences with distance ratio
-         matches: DMatch object from OpenCV
+        To compute putative correspondences with distance ratio
+        matches: DMatch object from OpenCV
         """
         print('[{}] To filter the matches using ratio of distance proposed by David Lowe ...'.format(cls.__name__))
         #TODO: 可以自由選擇是否要過濾這些matches,觀察有無過濾後在後續的homography表現是否改善
-        print(str(matches))
+        # print(str(matches))
         good_threshold = 0.75
         # Apply ratio test as Lowe's paper
         good = []
@@ -271,7 +358,7 @@ class FeatureMatching:
             # keep = int(len(matches) * keepPercent)
             # matches = matches[:keep]
             
-        print(str(matches))
+        # print(str(matches))
         return matches
 
 
@@ -300,11 +387,15 @@ class ImageAlignment:
     @classmethod
     def find_homography(cls,kpsA, kpsB, matches, method=0):
         """
-        calculate homography matrix (perspective transformation), should have at least 4 corresponding point
+        To calculate homography matrix (perspective transformation), should have at least 4 corresponding point
+        kpsA: a list of query image Keypoints object
+        kpsB: a list of template image Keypoints object
+        matches: a list of DMatch object
         method: RANSAC - RANSAC-based robust method
                 LMEDS - Least-Median robust method
                 RHO - PROSAC-based robust method
         H: homography matrix
+        mask: a list of inliers/outliers mask
         """
         print('[{}] The processing of homography calculation is started ...'.format(cls.__name__))
         if method == 0:
@@ -409,7 +500,7 @@ class FeatureExtraction:
     def get_keypoint(self, image, maxFeatures=500, method=0):
         """
         detect keypoints and extract (binary) local invariant features
-        keypoints: FAST keypoint including coordination
+        keypoints: FAST keypoints that including coordinates
         descrips: BRIEF descriptor(32 dimensions By default)
         """
         # convert both the input image to grayscale

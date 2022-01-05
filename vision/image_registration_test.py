@@ -2,7 +2,7 @@ from image_registration_pipeline import Data, Display, PipelineBase, LoadImage, 
 from typing import Dict, List, Any, Union, Tuple, get_type_hints
 
 
-MAX_FEATURES = 100
+MAX_FEATURES = 300
 # ORB: 0,
 FEATURE_EXTRACTION = 0 
 # BRUTEFORCE_HAMMING: 0, FLANN: 1
@@ -42,7 +42,8 @@ matches_data = vision_pipeline.execute(matches_data)
 print('matchesMask => '+ str(matches_data.matchesMask))
 Display().show_matches(matches_data.matches,mode=FEATURE_MATCHING)
 Display().draw_matches(query_data.input_image, query_data.input_keypoints, template_data.input_image, template_data.input_keypoints, matches_data.matches, mode=FEATURE_MATCHING,matchesMask=None, save_path=MATCHES_PATH)
+Display().draw_matches(query_data.input_image, query_data.input_keypoints, template_data.input_image, template_data.input_keypoints, matches_data.matches, mode=FEATURE_MATCHING,matchesMask=matches_data.matchesMask, save_path=MATCHES_PATH[:-4]+'_inliers.png')
 
-evaluation_data = Data('evaluation_data',[('template_image',template_data.input_image),('template_keypoints',template_data.input_keypoints),('query_keypoints',query_data.input_keypoints),('homography',matches_data.homography)]).get_data()
+evaluation_data = Data('evaluation_data',[('template_image',template_data.input_image),('template_keypoints',template_data.input_keypoints),('query_keypoints',query_data.input_keypoints),('homography',matches_data.homography),('matches',matches_data.matches)]).get_data()
 vision_pipeline = PipelineBase([Evaluation])
 evaluation_data = vision_pipeline.execute(evaluation_data)
