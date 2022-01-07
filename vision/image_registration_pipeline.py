@@ -86,20 +86,7 @@ class Display:
        
 
 class Evaluation:
-    # def __init__(self) -> None:
-    #     """
-    #     TP = correct_matches_number
-    #     FP+FP = putative_matches_number 
-    #     FP = all
-    #     """
-    #     print('[{}] The processing of evaluation.init() is started ...'.format(self.__class__.__name__))
-    #     self.template_kps_number = None
-    #     self.query_kps_number = None
-    #     self.correct_matches_number = None
-    #     self.putative_matches_number = None
-        
-
-
+    
     def precision(self) -> float:
         """
         Precision = correct matches/putative matches。
@@ -115,7 +102,6 @@ class Evaluation:
         """
         print('[{}] Calculating the recall ...'.format(self.__class__.__name__))
         recall = self.correct_matches_number/self.matches_number
-        
         print('[{}] Recall is done.'.format(self.__class__.__name__))
         return recall
 
@@ -244,7 +230,8 @@ class Evaluation:
         
         templatePts = self.keypoints2List(data.template_keypoints)
         corrs_pts = self.get_correspondance(projQueryPts,templatePts,ERROR)
-
+        # print('corrs_pts =>'+str(corrs_pts))
+        #TODO: 要確認correct matches是否是屬於putative matches的子集合？可用intersection找出相同的matches
         precision = self.precision()
         recall = self.recall()
         repeatability = self.repeatability()
@@ -278,6 +265,7 @@ class Evaluation:
         img = data.template_image.copy()
         for pair in corrs_pts:
             R,Q = pair
+            # print('(R,Q):{},{}'.format(str(R[0][0]),str(R[0][1])))
             cv2.circle(img,(int(R[0][0]),int(R[0][1])),2,(255,0,0))
             cv2.circle(img,(int(Q[0][0]),int(Q[0][1])),4,(0,0,255))
 
@@ -464,12 +452,7 @@ class ImageAlignment:
         align image via transformation
         wraped: wraped image
         """
-        ## TODO: warp後的影像長寬倒過來
-        print('wrap size=>'+str(size))
-        # if( len(image.shape) > 2 ):
-        #     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) 
-        wraped = cv2.warpPerspective(image, H,(size[1],size[0]))
-        print('wraped size=>'+str(wraped.shape))
+        wraped = cv2.warpPerspective(image, H, (size[1],size[0]))
         return wraped
 
     def execute(self, data: Any) -> Any:
@@ -503,6 +486,7 @@ class ImageAlignment:
         else:
             raise Exception('[{}] `Minimum {} corresponding points` are required, only have {} !'.format(self.__class__.__name__,len(MIN_MATCH_COUNT),len(data.putative_matches)))
         
+        print('[{}] Image alignment is done.'.format(self.__class__.__name__))
         return data
 
 
