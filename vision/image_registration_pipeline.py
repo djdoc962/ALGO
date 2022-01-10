@@ -1,6 +1,6 @@
 from typing import Dict, List, Any, Union, Tuple, get_type_hints
 from dataclasses import dataclass, asdict, make_dataclass, is_dataclass
-import inspect
+import inspect,os
 import cv2
 import numpy as np
 from skimage.draw import line
@@ -202,7 +202,7 @@ class Evaluation:
 
         cls.correct_matches_number = len(correspondance)
         print('[{}] The processing of correspondance is done.'.format(cls.__name__))
-        return correspondance
+        return correspondance.reshape(-1,1,2)
 
         
     def execute(self, data: Any) -> Any:
@@ -227,10 +227,24 @@ class Evaluation:
         projQueryPts = self.project_coordinates(data.query_keypoints,data.homography)
         # print('get destination coordinates : ' + str(projQueryPts.shape))
         projTemplatePts = self.project_coordinates(data.template_keypoints,data.homography)
+        #TODO: putative其中的query轉關鍵點
+        ptsA, ptsB = ImageAlignment.match2Keypoint(data.putative_matches,data.query_keypoints,data.template_keypoints)
+
+        print('putative_matches ptsA => ')
+        print('total {} keypoints on query image'.format(str(ptsA.reshape(-1,1,2))))
         
+        # print('putative_matches ptsB => ')
+        # print('total {} keypoints on template image'.format(str(ptsB.reshape(-1,1,2))))
+
+       
+        proPutativePts = cv2.perspectiveTransform(ptsA.reshape(-1,1,2),data.homography)
+        print('the projected keypoints from query image =>')
+        print(str(proPutativePts))
+
         templatePts = self.keypoints2List(data.template_keypoints)
-        corrs_pts = self.get_correspondance(projQueryPts,templatePts,ERROR)
-        # print('corrs_pts =>'+str(corrs_pts))
+        # print('templatePts =>'+str(templatePts))
+        corrs_matches = self.get_correspondance(projQueryPts,templatePts,ERROR)
+        print('corrs_matches =>'+str(corrs_matches))
         #TODO: 要確認correct matches是否是屬於putative matches的子集合？可用intersection找出相同的matches
         precision = self.precision()
         recall = self.recall()
@@ -241,17 +255,17 @@ class Evaluation:
         print('- distance must less than {} pixels '.format(ERROR))
         print('- number of all matches is {}'.format(len(data.matches)))
         print('- number of putative matches is {}'.format(self.putative_matches_number))
-        print('- number of correct matches is {}'.format(len(corrs_pts)))
+        print('- number of correct matches is {}'.format(len(corrs_matches)))
         print("- Precision: {:.0%}".format(precision))
         print("- Recall: {:.0%}".format(recall))
         print("- Repeatability: {:.0%}".format(repeatability))
       
         ## Drawing aligned results
         img = data.template_image.copy()
-        for item in templatePts:
+        for item in proPutativePts:
             cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(0,255,0))
 
-        WriteImage().execute(img,'./outcome/origin_template.png')
+        WriteImage().execute(img,'./outcome/origin_putative.png')
         for item in projTemplatePts:
             cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(0,0,255))
         
@@ -263,7 +277,7 @@ class Evaluation:
         # cv2.imshow('destination keypoints on image', img)
         # cv2.waitKey(0)
         img = data.template_image.copy()
-        for pair in corrs_pts:
+        for pair in corrs_matches:
             R,Q = pair
             # print('(R,Q):{},{}'.format(str(R[0][0]),str(R[0][1])))
             cv2.circle(img,(int(R[0][0]),int(R[0][1])),2,(255,0,0))
@@ -289,8 +303,7 @@ class FeatureMatching:
 
         
         matches = self.match(data.query_descriptors,data.template_descriptors, keepPercent=self.keepPercent,method=self.method)
-        data.matches = matches
-        print('original data.matches =>'+str(data.matches))
+      
         # only get the closest element for KNN methods
         if self.method:
             new_matches = []
@@ -307,16 +320,6 @@ class FeatureMatching:
         else:
             data.matches = matches
             data.putative_matches = matches 
-
-        print('processed data.matches =>'+str(data.matches))
-        #TODO: get better matches by checking if ratio of distances is less the threshold   
-        # if self.filter:
-        #     print('Do good_matches started =>')
-        #     if self.method:
-        #         matches = self.good_matches(matches,self.method) 
-        #     else:
-        #         print('[{}] Warning: only FLANN-based matching can do ratio test !'.format(self.__class__.__name__))
-       
 
         print('[{}] The processing of features matching is finished.'.format(self.__class__.__name__))
         return data
@@ -397,11 +400,13 @@ class ImageAlignment:
     def match2Keypoint(cls,matches,KptA,KptB):
         """
         get matching keypoints for each of the images
-        ptsA: coordinates of image A
-        ptsB: coordinates of image B
+        KptA: list of KeyPoints of query image
+        KptB: list of KeyPoints of template image
+        ptsA: list of coordinates of query image 
+        ptsB: list of coordinates of template image
         """
-        print('matches => ')
-        print(str(matches))
+        # print('matches => ')
+        # print(str(len(matches)))
         ptsA = np.zeros((len(matches), 2), dtype="float")
         ptsB = np.zeros((len(matches), 2), dtype="float")
         # loop over the top matches
@@ -410,6 +415,7 @@ class ImageAlignment:
             # map to each other
             ptsA[i] = KptA[m.queryIdx].pt
             ptsB[i] = KptB[m.trainIdx].pt
+
         return ptsA, ptsB
 
   
@@ -740,6 +746,25 @@ if __name__ == '__main__':
     experiment pipeline for image registration
 
     """
+    MAX_FEATURES = 200
+    # ORB: 0,
+    FEATURE_EXTRACTION = 0 
+    # BRUTEFORCE_HAMMING: 0, FLANN: 1
+    FEATURE_MATCHING = 0   
+    MATCHES_PERCENT = 0.5
+    MATCHES_FILTER = True
+
+    BASE_PATH = './outcome/'
+    KPS_TEMPLATE_PATH = BASE_PATH + 'template_keypoints_' + str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
+    KPS_QUERY_PATH = BASE_PATH + 'query_keypoints_' + str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
+    MATCHES_PATH = BASE_PATH + 'matches_' +str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
+    ALIGN_PATH = BASE_PATH + 'alignment_' +str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
+   
+   
+    CHECK_FOLDER = os.path.isdir(BASE_PATH)
+    if not CHECK_FOLDER:
+        os.makedirs(BASE_PATH)
+
     print('[START] Experiment Pipeline testing ------------------------------')
     print('- Specified data list: ')
     print(get_type_hints(Data))
@@ -780,6 +805,16 @@ if __name__ == '__main__':
     # Display().show_keypoints(PairData.template_keypoints)
     # Display().show_descriptors(PairData.template_descriptors)
     # Display().show_matches(PairData.matches)
+
+    Display().draw_keypoints(PairData.template_image,PairData.template_keypoints,save_path=KPS_TEMPLATE_PATH)
+    Display().draw_keypoints(PairData.query_image,PairData.query_keypoints,save_path=KPS_QUERY_PATH)
+    Display().draw_matches(PairData.query_image, PairData.query_keypoints, PairData.template_image, PairData.template_keypoints, PairData.putative_matches, mode=FEATURE_MATCHING,matchesMask=None, save_path=MATCHES_PATH)
+    Display().draw_matches(PairData.query_image, PairData.query_keypoints, PairData.template_image, PairData.template_keypoints, PairData.putative_matches, mode=FEATURE_MATCHING,matchesMask=PairData.matchesMask, save_path=MATCHES_PATH[:-4]+'_inliers.png')
+    WriteImage().execute(PairData.aligned_image, save_path=ALIGN_PATH)
+
+    evaluation_data = Data('evaluation_data',[('template_image',PairData.template_image),('template_keypoints',PairData.template_keypoints),('query_keypoints',PairData.query_keypoints),('homography',PairData.homography),('matches',PairData.matches),('putative_matches',PairData.putative_matches)]).get_data()
+    vision_pipeline = PipelineBase([Evaluation])
+    evaluation_data = vision_pipeline.execute(evaluation_data)
   
 
   

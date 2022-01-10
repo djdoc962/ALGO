@@ -1,6 +1,6 @@
-from image_registration_pipeline import Data, Display, PipelineBase, LoadImage, WriteImage, LocalFeaturesPairs, FeatureExtraction, FeatureMatching, ImageAlignment, Evaluation
+from image_registration_pipeline2 import Data, Display, PipelineBase, LoadImage, WriteImage, LocalFeaturesPairs, FeatureExtraction, FeatureMatching, ImageAlignment, Evaluation
 from typing import Dict, List, Any, Union, Tuple, get_type_hints
-
+import os
 
 MAX_FEATURES = 200
 # ORB: 0,
@@ -16,6 +16,11 @@ MATCHES_PATH = BASE_PATH + 'matches_' +str(FEATURE_MATCHING) + '_' + str(MAX_FEA
 ALIGN_PATH = BASE_PATH + 'alignment_' +str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
 QUERY_PATH = './outcome/affine/insurance2_scale_0.5.png'
 TEMPLATE_PATH = './image/insurance2_template.png'
+
+
+CHECK_FOLDER = os.path.isdir(BASE_PATH)
+if not CHECK_FOLDER:
+    os.makedirs(BASE_PATH)
 
 
 print('[START] Experiment Pipeline testing ------------------------------')
