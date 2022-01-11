@@ -24,8 +24,8 @@ class Config:
 
     BRIGHTNESS_RATIO = None
     FLIP_ORIENTATION = None
-    SCALE_RATIO = 0.5
-    DEGREE = (-10., 5.)
+    SCALE_RATIO = 0.8
+    DEGREE = (-5., 5.)
     H_SHIFT = None
     V_SHIFT = None
 
@@ -284,6 +284,7 @@ class ImageProcessor:
         M = np.float32([[1, 0, dw], [0, 1, dh]])
 
         self.image_array = cv2.warpAffine(self.image_array.copy(), M, (width, height))
+        print('translation ( H: {}, V: {})'.format(dw,dh))
         return M
 
     @staticmethod
@@ -430,7 +431,7 @@ class ImageAugmentation:
                 image_input.rotate(degree=self.degree)
 
             if self.h_shift is not None or self.v_shift is not None:
-                print('horizon/vertical shift =>')
+                print('horizon/vertical shift => ')
                 image_input.translate(horizontal=self.h_shift, vertical=self.v_shift)
 
             if self.angle_scale is not None or self.irregularity is not None or self.spikeyness is not None:
@@ -446,7 +447,7 @@ class ImageAugmentation:
 
 
 if __name__ == '__main__':
-    source_ref = './image/import_query.png'
+    source_ref = './image/insurance2_template.png'
     config = Config()
     augment = ImageAugmentation(brightness_ratio=config.BRIGHTNESS_RATIO,
                                 flip_orientation=config.FLIP_ORIENTATION,
@@ -468,7 +469,7 @@ if __name__ == '__main__':
     for image_input in image_input_list:
         # cv2.imshow('Augment', image_input.image_array)
         augment.execute(image_input_list=image_input_list)
-        cv2.imwrite('./outcome/final{}.png'.format(str(i)),image_input.image_array)
+        cv2.imwrite('./outcome/affine/final{}.png'.format(str(i)),image_input.image_array)
         i+=1
         # key = cv2.waitKey(5000)
         # if key == ord('q') or key == 27:
