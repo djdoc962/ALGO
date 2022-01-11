@@ -134,12 +134,17 @@ class Evaluation:
     @classmethod
     def project_coordinates(cls, kps, M) -> list:
         """ 
-        To project the keypoints coordinates to the template image using perspective transform 
+        To project the keypoints coordinates to the template image using perspective transform
+        kps: A numpy array of coordinates on image
+        M: homography matrix
+        dst_pts: projected coordinates 
         """
         print('[{}] The processing of project_coordinates is started ...'.format(cls.__name__))
-        pts = cls.keypoints2List(kps)
-        dst_pts = cv2.perspectiveTransform(pts,M)
-        # print('get dst => '+str(dst_pts.shape))
+
+        if not Data.check_type(kps,np.ndarray):
+            raise Exception('[{}] `kps` must be `numpy.ndarray` ! '.format(cls.__name__))
+
+        dst_pts = cv2.perspectiveTransform(kps,M)
         print('[{}] The processing of project_coordinates is done.'.format(cls.__name__))
         return dst_pts
 
@@ -202,7 +207,7 @@ class Evaluation:
 
         cls.correct_matches_number = len(correspondance)
         print('[{}] The processing of correspondance is done.'.format(cls.__name__))
-        return correspondance.reshape(-1,1,2)
+        return correspondance
 
         
     def execute(self, data: Any) -> Any:
@@ -224,28 +229,20 @@ class Evaluation:
         ## If the matches have never be filtered, which can be seen as putative matches
         self.putative_matches_number = len(data.putative_matches)
         self.matches_number = len(data.matches)
-        projQueryPts = self.project_coordinates(data.query_keypoints,data.homography)
-        # print('get destination coordinates : ' + str(projQueryPts.shape))
-        projTemplatePts = self.project_coordinates(data.template_keypoints,data.homography)
-        #TODO: putative其中的query轉關鍵點
+        # extract query image keypoints from matches 
         ptsA, ptsB = ImageAlignment.match2Keypoint(data.putative_matches,data.query_keypoints,data.template_keypoints)
+        projPutativePts = self.project_coordinates(ptsA.reshape(-1,1,2),data.homography)
+    
+        # convert KeyPoints object to numpy array
+        pts = self.keypoints2List(data.query_keypoints)
+        projQueryPts = self.project_coordinates(pts,data.homography)
 
-        print('putative_matches ptsA => ')
-        print('total {} keypoints on query image'.format(str(ptsA.reshape(-1,1,2))))
-        
-        # print('putative_matches ptsB => ')
-        # print('total {} keypoints on template image'.format(str(ptsB.reshape(-1,1,2))))
-
-       
-        proPutativePts = cv2.perspectiveTransform(ptsA.reshape(-1,1,2),data.homography)
-        print('the projected keypoints from query image =>')
-        print(str(proPutativePts))
+        pts = self.keypoints2List(data.template_keypoints)
+        projTemplatePts = self.project_coordinates(pts,data.homography)
 
         templatePts = self.keypoints2List(data.template_keypoints)
-        # print('templatePts =>'+str(templatePts))
-        corrs_matches = self.get_correspondance(projQueryPts,templatePts,ERROR)
-        print('corrs_matches =>'+str(corrs_matches))
-        #TODO: 要確認correct matches是否是屬於putative matches的子集合？可用intersection找出相同的matches
+        corrs_matches = self.get_correspondance(projPutativePts,templatePts,ERROR)
+      
         precision = self.precision()
         recall = self.recall()
         repeatability = self.repeatability()
@@ -262,18 +259,17 @@ class Evaluation:
       
         ## Drawing aligned results
         img = data.template_image.copy()
-        for item in proPutativePts:
-            cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(0,255,0))
-
-        WriteImage().execute(img,'./outcome/origin_putative.png')
         for item in projTemplatePts:
             cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(0,0,255))
-        
         WriteImage().execute(img,'./outcome/project_template.png')
+
         for item in projQueryPts:
             cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(255,0,0))
-        
         WriteImage().execute(img,'./outcome/project_query_template.png')
+
+        for item in projPutativePts:
+            cv2.circle(img,(int(item[0][0]),int(item[0][1])),3,(0,255,0))
+        WriteImage().execute(img,'./outcome/project_putative.png')
         # cv2.imshow('destination keypoints on image', img)
         # cv2.waitKey(0)
         img = data.template_image.copy()

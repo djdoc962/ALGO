@@ -1,4 +1,4 @@
-from image_registration_pipeline2 import Data, Display, PipelineBase, LoadImage, WriteImage, LocalFeaturesPairs, FeatureExtraction, FeatureMatching, ImageAlignment, Evaluation
+from image_registration_pipeline import Data, Display, PipelineBase, LoadImage, WriteImage, LocalFeaturesPairs, FeatureExtraction, FeatureMatching, ImageAlignment, Evaluation
 from typing import Dict, List, Any, Union, Tuple, get_type_hints
 import os
 
@@ -14,8 +14,10 @@ KPS_TEMPLATE_PATH = BASE_PATH + 'template_keypoints_' + str(FEATURE_MATCHING) + 
 KPS_QUERY_PATH = BASE_PATH + 'query_keypoints_' + str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
 MATCHES_PATH = BASE_PATH + 'matches_' +str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
 ALIGN_PATH = BASE_PATH + 'alignment_' +str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
-QUERY_PATH = './outcome/affine/insurance2_scale_0.5.png'
-TEMPLATE_PATH = './image/insurance2_template.png'
+# QUERY_PATH = './outcome/affine/insurance2_scale_0.8_rotate_-4.9.png'
+# TEMPLATE_PATH = './image/insurance2_template.png'
+QUERY_PATH = './image/box.png'
+TEMPLATE_PATH = './image/box_in_scene.png'
 
 
 CHECK_FOLDER = os.path.isdir(BASE_PATH)
