@@ -4,11 +4,12 @@ import os
 
 MAX_FEATURES = 200
 # ORB: 0,
-FEATURE_EXTRACTION = 0 
+FEATURE_EXTRACTION = 0
 # BRUTEFORCE_HAMMING: 0, FLANN: 1
-FEATURE_MATCHING = 0   
+FEATURE_MATCHING = 1
 MATCHES_PERCENT = 0.5
 MATCHES_FILTER = True
+GOOD_THRESHOLD = 0.75
 BASE_PATH = './outcome/'
 KPS_TEMPLATE_PATH = BASE_PATH + 'template_keypoints_' + str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
 KPS_QUERY_PATH = BASE_PATH + 'query_keypoints_' + str(FEATURE_MATCHING) + '_' + str(MAX_FEATURES) + '_' + str(MATCHES_PERCENT) + '.png'
@@ -28,16 +29,16 @@ if not CHECK_FOLDER:
 print('[START] Experiment Pipeline testing ------------------------------')
 print('- Specified data list: ')
 print(get_type_hints(Data))
-## template image 
+## template image
 template_data = Data('template_data',[('img_path',TEMPLATE_PATH),('input_image',None),('input_keypoints',None),('input_descriptors',None)]).get_data()
 processes = [LoadImage,FeatureExtraction(maxFeatures=MAX_FEATURES,method=FEATURE_EXTRACTION)]
 vision_pipeline = PipelineBase(processes)
 template_data = vision_pipeline.execute(template_data)
 Display().draw_keypoints(template_data.input_image,template_data.input_keypoints,save_path=KPS_TEMPLATE_PATH)
 
-## query image 
+## query image
 query_data = Data('query_data',[('img_path',QUERY_PATH),('input_image',None),('input_keypoints',None),('input_descriptors',None)]).get_data()
-# print('_LoadImage_FeatureExtraction => '+str(query_data)) 
+# print('_LoadImage_FeatureExtraction => '+str(query_data))
 processes = [LoadImage,FeatureExtraction(maxFeatures=MAX_FEATURES,method=FEATURE_EXTRACTION)]
 vision_pipeline = PipelineBase(processes)
 query_data = vision_pipeline.execute(query_data)
@@ -48,7 +49,7 @@ query_data = vision_pipeline.execute(query_data)
 Display().draw_keypoints(query_data.input_image,query_data.input_keypoints,save_path=KPS_QUERY_PATH)
 
 matches_data = Data('matches_data',[('query_image',query_data.input_image),('query_descriptors',query_data.input_descriptors),('query_keypoints',query_data.input_keypoints),('template_image',template_data.input_image),('template_descriptors',template_data.input_descriptors),('template_keypoints',template_data.input_keypoints)]).get_data()
-vision_pipeline = PipelineBase([FeatureMatching(keepPercent=MATCHES_PERCENT,filter=MATCHES_FILTER, method=FEATURE_MATCHING),ImageAlignment])
+vision_pipeline = PipelineBase([FeatureMatching(keepPercent=MATCHES_PERCENT,filter=MATCHES_FILTER, method=FEATURE_MATCHING, good_threshold=GOOD_THRESHOLD),ImageAlignment])
 matches_data = vision_pipeline.execute(matches_data)
 print('matchesMask => '+ str(len(matches_data.matchesMask))) ## 跟putative數量一樣
 print('all matches => '+ str(len(matches_data.matches)))
@@ -59,5 +60,5 @@ Display().draw_matches(query_data.input_image, query_data.input_keypoints, templ
 
 WriteImage().execute(matches_data.aligned_image, save_path=ALIGN_PATH)
 evaluation_data = Data('evaluation_data',[('template_image',template_data.input_image),('template_keypoints',template_data.input_keypoints),('query_keypoints',query_data.input_keypoints),('homography',matches_data.homography),('matches',matches_data.matches),('putative_matches',matches_data.putative_matches)]).get_data()
-vision_pipeline = PipelineBase([Evaluation])
+vision_pipeline = PipelineBase([Evaluation(save_path=BASE_PATH)])
 evaluation_data = vision_pipeline.execute(evaluation_data)
